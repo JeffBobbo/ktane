@@ -85,12 +85,12 @@ void loop()
       digitalWrite(LEDS[code[0]], (millis() % (FLASH_TIME + REPEAT_TIME)) < FLASH_TIME);
     break;
     case SHOWING:
-    {      
+    {
       // turn the LEDs off
       for (uint8_t i = 0; i < 4; ++i)
         digitalWrite(LEDS[i], 0);
 
-      const uint32_t period = (progress+1) * (FLASH_TIME + PAUSE_TIME);
+      const uint32_t period = PAUSE_TIME + (progress+1) * (FLASH_TIME + PAUSE_TIME);
       const uint32_t now = millis() - start;
       if (now > period) // if we're done, go to WAITING
       {
@@ -100,18 +100,20 @@ void loop()
 
       // calculate which one to show
       uint8_t show = MAX_CODE_LENGTH;
-      if (now < FLASH_TIME)
+      if (now < PAUSE_TIME)
+        show = 4;
+      else if (now < PAUSE_TIME + FLASH_TIME)
         show = 0;
-      else if (now > FLASH_TIME + PAUSE_TIME &&
-               now < FLASH_TIME + PAUSE_TIME + FLASH_TIME)
+      else if (now > FLASH_TIME + 2 * PAUSE_TIME &&
+               now < FLASH_TIME + 2 * PAUSE_TIME + FLASH_TIME)
         show = 1;
-      else if (now > 2 * (FLASH_TIME + PAUSE_TIME) &&
-               now < 2 * (FLASH_TIME + PAUSE_TIME) + FLASH_TIME)
+      else if (now > 2 * (FLASH_TIME + PAUSE_TIME) + PAUSE_TIME &&
+               now < 3 * (FLASH_TIME + PAUSE_TIME))
         show = 2;
-      else if (now > 3 * (FLASH_TIME + PAUSE_TIME) &&
-               now < 3 * (FLASH_TIME + PAUSE_TIME) + FLASH_TIME)
+      else if (now > 3 * (FLASH_TIME + PAUSE_TIME) + PAUSE_TIME &&
+               now < 4 * (FLASH_TIME + PAUSE_TIME))
         show = 3;
-//      const uint32_t show = now % (FLASH_TIME + PAUSE_TIME) < FLASH_TIME ? now / (FLASH_TIME + PAUSE_TIME) : MAX_CODE_LENGTH;
+
       if (show < MAX_CODE_LENGTH)
         digitalWrite(LEDS[code[show]], 1);
     }
