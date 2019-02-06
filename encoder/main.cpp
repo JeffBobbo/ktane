@@ -5,6 +5,8 @@
 
 #include <Encoder.h>
 
+#include "version.h"
+
 const uint8_t NUM_STEPS = 20;
 
 const uint8_t PIN_DT = 3;
@@ -12,7 +14,7 @@ const uint8_t PIN_CLK = 2;
 const uint8_t PIN_BUTTON = 10;
 
 const uint8_t CODE_LENGTH = 3;
-uint8_t code[CODE_LENGTH] = {17, 4, 10};
+int8_t code[CODE_LENGTH] = {0};
 
 Encoder encoder(2, 3);
 
@@ -27,6 +29,8 @@ enum State
 
 uint8_t index = 0;
 
+uint32_t strike = 0;
+
 void setup()
 {
   pinMode(PIN_DT, INPUT);
@@ -34,6 +38,10 @@ void setup()
   pinMode(PIN_BUTTON, INPUT);
 
   digitalWrite(PIN_BUTTON, 1); // turn on internal pullup
+
+  code[0] = version_sum() % 20;
+  code[1] = code[0] - (version_hasEven() ? 10 : 5);
+  code[2] = code[1] + (version_hasVowel() ? 7 : 13);
 
   state = INITIAL;
 
@@ -70,7 +78,10 @@ void screen()
     case CODE_INPUT:
       display.setCursor(0, 0);
       display.setTextSize(4);
-      display.print(encoder.read() / 4);
+      if (millis() - strike < 1000)
+        display.print("STRIKE");
+      else
+        display.print(encoder.read() / 4);
     break;
     case COMPLETE:
       display.setCursor(0, 8);
@@ -84,7 +95,6 @@ void screen()
 
 void loop()
 {
-  encoder.write((encoder.read() + NUM_STEPS * 4) % (NUM_STEPS * 4));
   if (!digitalRead(PIN_BUTTON))
   {
     while (!digitalRead(PIN_BUTTON));
@@ -97,6 +107,7 @@ void loop()
 
     if (code[index] != encoder.read() / 4)
     {
+      strike = millis();
     }
     else
     {
