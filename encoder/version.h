@@ -1,20 +1,26 @@
 const char* const version = "8fecad7";
 
-bool version_hasVowel()
+uint8_t version_countVowel()
 {
   const size_t len = strlen(version);
+  uint8_t count = 0;
   for (size_t i = 0; i < len; ++i)
   {
     const char c = version[i];
     if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u')
-      return true;
+      ++count;
   }
-  return false;
+  return count;
+}
+bool version_hasVowel()
+{
+  return version_countVowel();
 }
 
-bool version_hasConsonant()
+uint8_t version_countConsonant()
 {
   const size_t len = strlen(version);
+  uint8_t count = 0;
   for (size_t i = 0; i < len; ++i)
   {
     const char c = version[i];
@@ -23,33 +29,49 @@ bool version_hasConsonant()
         (c > 'i' && c < 'o') ||
         (c > 'o' && c < 'u') ||
         (c > 'u' && c <= 'z'))
-      return true;
+      ++count;
   }
-  return false;
+  return count;  
 }
 
-bool version_hasEven()
+bool version_hasConsonant()
+{
+  return version_countConsonant();
+}
+
+uint8_t version_countEven()
 {
   const size_t len = strlen(version);
+  uint8_t count = 0;
   for (size_t i = 0; i < len; ++i)
   {
     const char c = version[i];
     if (isdigit(c) && (c - '0') % 2 == 0)
-      return true;
+      ++count;
   }
-  return false;
+  return count;  
 }
 
-bool version_hasOdd()
+bool version_hasEven()
+{
+  return version_countEven();
+}
+
+uint8_t version_countOdd()
 {
   const size_t len = strlen(version);
+  uint8_t count = 0;
   for (size_t i = 0; i < len; ++i)
   {
     const char c = version[i];
     if (isdigit(c) && (c - '0') % 2 == 1)
-      return true;
+      ++count;
   }
-  return false;
+  return count;
+}
+bool version_hasOdd()
+{
+  return version_countOdd();
 }
 
 int version_sum()
