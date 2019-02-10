@@ -2,7 +2,9 @@
 #include <Wire.h>
 
 #include "shared/address.h"
+#include "shared/config.h"
 #include "shared/message.h"
+#include "shared/util.h"
 
 #include <Encoder.h>
 
@@ -19,6 +21,7 @@ const uint8_t PIN_DISARMED_LED = 4;
 const uint8_t CODE_LENGTH = 3;
 int8_t code[CODE_LENGTH] = {0};
 
+char version[VERSION_LENGTH+1] = {0};
 bool calibrated = false;
 
 Encoder encoder(2, 3);
@@ -29,6 +32,10 @@ uint8_t index = 0;
 
 void receiveEvent(int count)
 {
+  // if count is 0, this is an ACK from master to check if we're alive
+  if (count == 0)
+    return;
+
   Message msg;
 
   for (int i = 0; i < count; ++i)
@@ -39,6 +46,16 @@ void receiveEvent(int count)
   {
     case OpCode::ARM:
       status.state = ModuleState::ARMED;
+    break;
+    case OpCode::DEFUSED:
+    case OpCode::EXPLODED:
+      status.state = ModuleState::STOP;
+    break;
+    case OpCode::VERSION:
+      strncpy(version, reinterpret_cast<char*>(msg.data), VERSION_LENGTH+1);
+      code[0] = util::countEvens(version) + util::countOdds(version);
+      code[1] = code[0] - (util::hasEvens(version) ? 10 : 5);
+      code[2] = code[1] + (util::hasVowels(version) ? 7 : 13);
     break;
   }
 }
@@ -53,6 +70,7 @@ void requestEvent()
 
 void setup()
 {
+  Serial.begin(9600);
   status.state = ModuleState::INITIALISATION;
 
   pinMode(PIN_DT, INPUT);
@@ -61,19 +79,16 @@ void setup()
 
   digitalWrite(PIN_BUTTON, 1); // turn on internal pullup
 
-  code[0] = 1;//version_sum() % 20;
-  code[1] = 1;//code[0] - (version_hasEven() ? 10 : 5);
-  code[2] = 1;//code[1] + (version_hasVowel() ? 7 : 13);
-
   Wire.begin(address::SAFE);
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);
-  
-  status.state = ModuleState::READY;
+  Wire.onRequest(requestEvent);  
 }
 
 void loop()
 {
+  if (!strlen(version))
+    status.state = ModuleState::READY;
+
   // don't do anything until we're ready
   if (status.state != ModuleState::ARMED)
     return;

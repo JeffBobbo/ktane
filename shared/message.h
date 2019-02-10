@@ -7,6 +7,9 @@
 
 struct Message
 {
+  Message() : opcode(OpCode::NO_OP), data{0} {}
+  Message(OpCode op) : opcode(op), data{0} {}
+
   OpCode opcode;
   uint8_t data[31];
 };
@@ -22,10 +25,11 @@ enum class BaseState : uint8_t
 
 enum class ModuleState : uint8_t
 {
-  INITIALISATION,
-  READY,
-  ARMED,
-  DISARMED
+  INITIALISATION, // while the module is starting up
+  READY, // once it's started up, but waiting for base
+  ARMED, // base has issued ARM message, game in progress
+  DISARMED, // this module has been successfully disarmed
+  STOP // game over state, either defused or exploded
 };
 
 struct Status

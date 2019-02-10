@@ -4,8 +4,8 @@
 #include <Adafruit_SSD1306.h>
 
 #include "shared/address.h"
+#include "shared/config.h"
 #include "shared/message.h"
-#include "shared/version.h"
 
 // analog pins
 const uint8_t PIN_SEED = A0; // for seeding rng
@@ -26,6 +26,7 @@ uint32_t now = 0;
 
 Address modules[address::NUM_MODULES] = {0};
 size_t moduleCount = 0;
+char version[VERSION_LENGTH+1] = {0};
 
 Adafruit_SSD1306 display(128, 64);
 
@@ -127,6 +128,12 @@ size_t broadcast(const uint8_t* const data, const size_t len)
   return len;
 }
 
+template <typename T>
+size_t broadcast(T& t)
+{
+  return broadcast(reinterpret_cast<uint8_t*>(&t), sizeof(t));
+}
+
 void scan()
 {
   for (size_t i = 0; i < address::NUM_MODULES; ++i)
@@ -156,9 +163,9 @@ void screen()
   uint16_t x2, y2;
 
   display.setTextSize(2);
-  display.getTextBounds(version::version, 0, 0, &x1, &y1, &x2, &y2);
+  display.getTextBounds(version, 0, 0, &x1, &y1, &x2, &y2);
   display.setCursor((128 - x2) / 2, 0);
-  display.print(version::version);
+  display.print(version);
 
   display_state();
 
@@ -175,6 +182,21 @@ void screen()
   display.display();
 }
 
+void generate()
+{
+  for (uint8_t i = 0; i < VERSION_LENGTH; ++i)
+  {
+    const uint8_t c = random(46);
+    if (c < 26)
+      version[i] = 'a' + c;
+    else if (c < 46)
+      version[i] = '0' + (c - 26) % 10;
+    else
+      version[i] = '?';
+  }
+  version[VERSION_LENGTH] = 0;
+}
+
 void setup()
 {
   state = BaseState::INITIALISATION;
@@ -182,7 +204,7 @@ void setup()
   randomSeed(analogRead(PIN_SEED));
 
   // generate random version hash
-  version::generate();
+  generate();
 
   Wire.begin();
 
@@ -206,16 +228,22 @@ void setup()
   // delay to ensure they're all powered up
   delay(250);
   scan();
+
+  // write to the screen once, since loop will block writes until all modules are ready
+  screen();
+
+  // transmit version info to all
+  Message vmsg(OpCode::VERSION);
+  strncpy(reinterpret_cast<char*>(vmsg.data), version, VERSION_LENGTH+1);
+  broadcast(vmsg);
 }
 
 void loop()
 {
   now = millis();
 
-  screen();
   if (state == BaseState::INITIALISATION)
   {
-    bool ready[moduleCount] = {false};
     bool allReady = false;
     while (!allReady)
     {
@@ -242,7 +270,7 @@ void loop()
     start = now;
     state = BaseState::ARMED;
 
-    Message tmsg = {OpCode::ARM};
+    Message tmsg(OpCode::ARM);
     broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
   }
 
@@ -252,7 +280,7 @@ void loop()
     {
       state = BaseState::EXPLODED;
       end = now;
-      Message tmsg = {OpCode::EXPLODED};
+      Message tmsg(OpCode::EXPLODED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
     size_t numDisarmed = 0;
@@ -268,8 +296,10 @@ void loop()
       state = BaseState::DEFUSED;
       end = now;
 
-      Message tmsg = {OpCode::DEFUSED};
+      Message tmsg(OpCode::DEFUSED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
   }
+
+  screen();
 }
