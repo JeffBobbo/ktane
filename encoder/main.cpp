@@ -1,121 +1,108 @@
 #include <Arduino.h>
+#include <Wire.h>
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include "shared/address.h"
+#include "shared/message.h"
 
 #include <Encoder.h>
 
-#include "version.h"
-
 const uint8_t NUM_STEPS = 20;
 
-const uint8_t PIN_DT = 3;
+// encoder
 const uint8_t PIN_CLK = 2;
+const uint8_t PIN_DT = 3;
 const uint8_t PIN_BUTTON = 10;
+
+// defuse status
+const uint8_t PIN_DISARMED_LED = 4;
 
 const uint8_t CODE_LENGTH = 3;
 int8_t code[CODE_LENGTH] = {0};
 
+bool calibrated = false;
+
 Encoder encoder(2, 3);
 
-Adafruit_SSD1306 display(128, 32);
-
-enum State
-{
-  INITIAL,
-  CODE_INPUT,
-  COMPLETE
-} state;
+Status status = {ModuleState::INITIALISATION, 0};
 
 uint8_t index = 0;
 
-uint32_t strike = 0;
+void receiveEvent(int count)
+{
+  Message msg;
+
+  for (int i = 0; i < count; ++i)
+    reinterpret_cast<uint8_t*>(&msg)[i] = Wire.read();
+
+  // process message
+  switch (msg.opcode)
+  {
+    case OpCode::ARM:
+      status.state = ModuleState::ARMED;
+    break;
+  }
+}
+
+void requestEvent()
+{
+  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
+
+  // reset this to zero once it's been sent
+  status.strikes = 0;
+}
 
 void setup()
 {
+  status.state = ModuleState::INITIALISATION;
+
   pinMode(PIN_DT, INPUT);
   pinMode(PIN_CLK, INPUT);
   pinMode(PIN_BUTTON, INPUT);
 
   digitalWrite(PIN_BUTTON, 1); // turn on internal pullup
 
-  code[0] = version_sum() % 20;
-  code[1] = code[0] - (version_hasEven() ? 10 : 5);
-  code[2] = code[1] + (version_hasVowel() ? 7 : 13);
+  code[0] = 1;//version_sum() % 20;
+  code[1] = 1;//code[0] - (version_hasEven() ? 10 : 5);
+  code[2] = 1;//code[1] + (version_hasVowel() ? 7 : 13);
 
-  state = INITIAL;
-
-  Wire.begin();
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
-  {
-    while (1)
-    {
-      digitalWrite(LED_BUILTIN, 1);
-      delay(250);
-      digitalWrite(LED_BUILTIN, 0);
-      delay(250);
-    }
-  }
-
-  display.clearDisplay();
-  display.setTextColor(WHITE);
-  display.setTextWrap(false);
-  display.dim(1);
-}
-
-void screen()
-{
-  display.clearDisplay();
-
-  switch (state)
-  {
-    case INITIAL:
-      display.setCursor(0, 8);
-      display.setTextSize(2);
-      display.print("CALIBRATE");
-    break;
-    case CODE_INPUT:
-      display.setCursor(0, 0);
-      display.setTextSize(4);
-      if (millis() - strike < 1000)
-        display.print("STRIKE");
-      else
-        display.print(encoder.read() / 4);
-    break;
-    case COMPLETE:
-      display.setCursor(0, 8);
-      display.setTextSize(2);
-      display.print("DISARMED");
-    break;
-  }
-
-  display.display();
+  Wire.begin(address::SAFE);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+  
+  status.state = ModuleState::READY;
 }
 
 void loop()
 {
+  // don't do anything until we're ready
+  if (status.state != ModuleState::ARMED)
+    return;
+
+  digitalWrite(PIN_DISARMED_LED, 1);
+
   if (!digitalRead(PIN_BUTTON))
   {
     while (!digitalRead(PIN_BUTTON));
-    if (state == INITIAL)
+    if (calibrated)
     {
-      encoder.write(0);
-      state = CODE_INPUT;
-      return;
-    }
-
-    if (code[index] != encoder.read() / 4)
-    {
-      strike = millis();
+      if (code[index] != encoder.read() / 4)
+      {
+        ++status.strikes;
+      }
+      else
+      {
+        ++index;
+        if (index >= CODE_LENGTH)
+        {
+          status.state = ModuleState::DISARMED;
+          digitalWrite(PIN_DISARMED_LED, 0);
+        }
+      }
     }
     else
     {
-      ++index;
-      if (index >= CODE_LENGTH)
-        state = COMPLETE;
+      encoder.write(0);
+      calibrated = true;
     }
   }
-
-  screen();
 }
