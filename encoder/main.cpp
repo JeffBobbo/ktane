@@ -22,13 +22,22 @@ const uint8_t CODE_LENGTH = 3;
 int8_t code[CODE_LENGTH] = {0};
 
 char version[VERSION_LENGTH+1] = {0};
-bool calibrated = false;
+bool calibrated;
 
 Encoder encoder(2, 3);
 
-Status status = {ModuleState::INITIALISATION, 0};
+Status status;
 
-uint8_t index = 0;
+uint8_t index;
+
+void reset()
+{
+  index = 0;
+  calibrated = false;
+  if (status.state != ModuleState::READY)
+    status.state = ModuleState::INITIALISATION;
+  status.strikes = 0;
+}
 
 void receiveEvent(int count)
 {
@@ -51,11 +60,15 @@ void receiveEvent(int count)
     case OpCode::EXPLODED:
       status.state = ModuleState::STOP;
     break;
+    case OpCode::RESET:
+      reset();
+    break;
     case OpCode::VERSION:
       strncpy(version, reinterpret_cast<char*>(msg.data), VERSION_LENGTH+1);
       code[0] = util::countEvens(version) + util::countOdds(version);
       code[1] = code[0] - (util::hasEvens(version) ? 10 : 5);
       code[2] = code[1] + (util::hasVowels(version) ? 7 : 13);
+      status.state = ModuleState::READY;
     break;
   }
 }
@@ -70,9 +83,6 @@ void requestEvent()
 
 void setup()
 {
-  Serial.begin(9600);
-  status.state = ModuleState::INITIALISATION;
-
   pinMode(PIN_DT, INPUT);
   pinMode(PIN_CLK, INPUT);
   pinMode(PIN_BUTTON, INPUT);
@@ -82,13 +92,12 @@ void setup()
   Wire.begin(address::SAFE);
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);  
+
+  reset();
 }
 
 void loop()
 {
-  if (!strlen(version))
-    status.state = ModuleState::READY;
-
   // don't do anything until we're ready
   if (status.state != ModuleState::ARMED)
     return;

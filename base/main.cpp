@@ -12,21 +12,24 @@ const uint8_t PIN_SEED = A0; // for seeding rng
 
 // digital pins
 const uint8_t PIN_START = 5;
+const uint8_t PIN_RESET = 3;
 
 // game state, and strikes
 BaseState state;
-uint8_t strikes = 0;
+uint8_t strikes;
 uint8_t MAX_STRIKES = 3;
 
 // timing
 const uint32_t TIME_ALLOWED = 3UL * 60UL * 1000UL;
 uint32_t start;
-uint32_t end = 0;
-uint32_t now = 0;
+uint32_t end;
+uint32_t now;
+uint32_t lastStrike;
+uint32_t STRIKE_TIME = 1000;
 
-Address modules[address::NUM_MODULES] = {0};
-size_t moduleCount = 0;
-char version[VERSION_LENGTH+1] = {0};
+Address modules[address::NUM_MODULES];
+size_t moduleCount;
+char version[VERSION_LENGTH+1];
 
 Adafruit_SSD1306 display(128, 64);
 
@@ -173,6 +176,13 @@ void screen()
   {
     display_timeRemaining();
     display_strikes();
+
+    if (lastStrike + STRIKE_TIME > millis())
+    {
+      display.getTextBounds("STRIKE", 0, 0, &x1, &y1, &x2, &y2);
+      display.setCursor((128 - x2) / 2, 48);
+      display.print("STRIKE");
+    }
   }
 
   display.setTextSize(2);
@@ -197,14 +207,41 @@ void generate()
   version[VERSION_LENGTH] = 0;
 }
 
-void setup()
+void reset()
 {
+  Message rmsg(OpCode::RESET);
+  broadcast(rmsg);
+
+  end = 0;
+  now = 0;
+  strikes = 0;
+  lastStrike = 0;
+
+  memset(modules, 0, address::NUM_MODULES);
+  moduleCount = 0;
+  memset(version, 0, VERSION_LENGTH+1);
+
   state = BaseState::INITIALISATION;
-
-  randomSeed(analogRead(PIN_SEED));
-
   // generate random version hash
   generate();
+
+  // scan for modules on the bus
+  // delay to ensure they're all powered up
+  delay(250);
+  scan();
+
+  // write to the screen once, since loop will block writes until all modules are ready
+  screen();
+
+  // transmit version info to all
+  Message vmsg(OpCode::VERSION);
+  strncpy(reinterpret_cast<char*>(vmsg.data), version, VERSION_LENGTH+1);
+  broadcast(vmsg);
+}
+
+void setup()
+{
+  randomSeed(analogRead(PIN_SEED));
 
   Wire.begin();
 
@@ -224,18 +261,7 @@ void setup()
   display.setTextWrap(false);
   display.dim(1);
 
-  // scan for modules on the bus
-  // delay to ensure they're all powered up
-  delay(250);
-  scan();
-
-  // write to the screen once, since loop will block writes until all modules are ready
-  screen();
-
-  // transmit version info to all
-  Message vmsg(OpCode::VERSION);
-  strncpy(reinterpret_cast<char*>(vmsg.data), version, VERSION_LENGTH+1);
-  broadcast(vmsg);
+  reset();
 }
 
 void loop()
@@ -287,7 +313,11 @@ void loop()
     for (size_t i = 0; i < moduleCount; ++i)
     {
       Status status = report(modules[i]);
-      strikes += status.strikes;
+      if (status.strikes)
+      {
+        strikes += status.strikes;
+        lastStrike = now;
+      }
       if (status.state == ModuleState::DISARMED)
         ++numDisarmed;
     }
@@ -298,6 +328,15 @@ void loop()
 
       Message tmsg(OpCode::DEFUSED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+    }
+  }
+
+  if (state == BaseState::DEFUSED || state == BaseState::EXPLODED)
+  {
+    if (digitalRead(PIN_RESET))
+    {
+      reset();
+      return;
     }
   }
 

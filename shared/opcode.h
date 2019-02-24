@@ -9,6 +9,7 @@ enum class OpCode : uint8_t
   ARM, // instructs a module to arm itself
   DEFUSED, // instructs a module to stop because it's been defused
   EXPLODED, // instructs a module to stop because it's exploded
+  RESET, // modules should reset
   VERSION // xfer of version string
 };
 
