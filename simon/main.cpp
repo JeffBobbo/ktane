@@ -8,10 +8,10 @@ const uint8_t LED_B = 2;
 const uint8_t LEDS[] = {LED_R, LED_G, LED_Y, LED_B};
 
 // inputs
-const uint8_t PIN_R = 6;
-const uint8_t PIN_G = 7;
-const uint8_t PIN_Y = 8;
-const uint8_t PIN_B = 9;
+const uint8_t PIN_R = 9;
+const uint8_t PIN_G = 8;
+const uint8_t PIN_Y = 7;
+const uint8_t PIN_B = 6;
 const uint8_t PINS[] = {PIN_R, PIN_G, PIN_Y, PIN_B};
 
 const uint8_t PIN_SEED = 0;
