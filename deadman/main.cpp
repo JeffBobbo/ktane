@@ -6,7 +6,6 @@
 
 // outputs
 const uint8_t PIN_LED = 5;
-const uint8_t PIN_STRIKE = 4;
 
 // inputs
 const uint8_t PIN_SWITCH = 9;
@@ -17,20 +16,60 @@ const uint32_t DETONATION_TIME = 5000;
 // cooldown between strikes
 const uint32_t COOLDOWN = 15000;
 
-void setup()
-{
-  // setup pins
-  pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_STRIKE, OUTPUT);
-  digitalWrite(PIN_LED, 0);
-  digitalWrite(PIN_STRIKE, 0);
+// time when button was last released (or 0 for held)
+uint32_t released = 0;
 
-  pinMode(PIN_SWITCH, INPUT);
+Status status = {ModuleState::INITIALISATION, 0};
+
+void receiveEvent(int count)
+{
+  if (count == 0)
+    return;
+
+  Message msg;
+  for (int i = 0; i < count; ++i)
+    reinterpret_cast<uint8_t*>(&msg)[i] = Wire.read();
+
+  switch (msg.opcode)
+  {
+    case OpCode::ARM:
+      status.state = ModuleState::ARMED;
+    break;
+    case OpCode::DEFUSED:
+    case OpCode::EXPLODED:
+      status.state = ModuleState::STOP;
+    break;
+    default:
+    break;
+  }
 }
 
-uint32_t released = 0;
+void requestEvent()
+{
+  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
+  status.strikes = 0;
+}
+
+void setup()
+{
+  status.state = ModuleState::READY;
+
+  // setup pins
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, 0);
+
+  pinMode(PIN_SWITCH, INPUT);
+
+  Wire.begin(address::DEADMAN);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+}
+
 void loop()
 {
+  if (status.state != ModuleState::ARMED)
+    return;
+
   if (digitalRead(PIN_SWITCH))
   {
     if (released)
@@ -49,10 +88,7 @@ void loop()
   {
     if (millis() > released + DETONATION_TIME)
     {
-      digitalWrite(PIN_STRIKE, 1);
-      delay(500);
-      digitalWrite(PIN_STRIKE, 0);
-      delay(500);
+      status.strikes = 1;
       released = millis() + COOLDOWN;
     }
     else
