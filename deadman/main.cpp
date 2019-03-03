@@ -17,9 +17,17 @@ const uint32_t DETONATION_TIME = 5000;
 const uint32_t COOLDOWN = 15000;
 
 // time when button was last released (or 0 for held)
-uint32_t released = 0;
+uint32_t released;
 
-Status status = {ModuleState::INITIALISATION, 0};
+Status status;
+
+void reset()
+{
+  status.state = ModuleState::READY;
+  status.strikes = 0;
+
+  released = 0;
+}
 
 void receiveEvent(int count)
 {
@@ -39,6 +47,9 @@ void receiveEvent(int count)
     case OpCode::EXPLODED:
       status.state = ModuleState::STOP;
     break;
+    case OpCode::RESET:
+      reset();
+    break;
     default:
     break;
   }
@@ -52,8 +63,6 @@ void requestEvent()
 
 void setup()
 {
-  status.state = ModuleState::READY;
-
   // setup pins
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, 0);
@@ -63,6 +72,8 @@ void setup()
   Wire.begin(address::DEADMAN);
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
+
+  reset();
 }
 
 void loop()
