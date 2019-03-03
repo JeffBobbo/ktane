@@ -111,7 +111,7 @@ void loop()
     {
       if (code[index] != encoder.read() / 4)
       {
-        ++status.strikes;
+        status.strikes = 1;
       }
       else
       {
