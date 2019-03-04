@@ -5,10 +5,11 @@
 #include "shared/message.h"
 
 // outputs
-const uint8_t PIN_LED = 5;
+const uint8_t PIN_LED = 4;
+const uint8_t PIN_COOLDOWN = 5;
 
 // inputs
-const uint8_t PIN_SWITCH = 9;
+const uint8_t PIN_SWITCH = 2;
 
 // how long allowed to not die
 const uint32_t DETONATION_TIME = 5000;
@@ -26,7 +27,7 @@ void reset()
   status.state = ModuleState::READY;
   status.strikes = 0;
 
-  released = 0;
+  // released is set when we transition from READY to ARMED
 }
 
 void receiveEvent(int count)
@@ -65,6 +66,7 @@ void setup()
 {
   // setup pins
   pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_COOLDOWN, OUTPUT);
   digitalWrite(PIN_LED, 0);
 
   pinMode(PIN_SWITCH, INPUT);
@@ -79,7 +81,10 @@ void setup()
 void loop()
 {
   if (status.state != ModuleState::ARMED)
+  {
+    released = millis() + COOLDOWN;
     return;
+  }
 
   if (digitalRead(PIN_SWITCH))
   {
@@ -105,7 +110,15 @@ void loop()
     else
     {
       const uint32_t remain = released + DETONATION_TIME - millis();
-      digitalWrite(PIN_LED, static_cast<uint32_t>(remain / sqrt(remain) * 0.5f) % 2);
+      if (remain > DETONATION_TIME)
+      {
+        digitalWrite(PIN_COOLDOWN, 1);
+      }
+      else
+      {
+        digitalWrite(PIN_COOLDOWN, 0);
+        digitalWrite(PIN_LED, static_cast<uint32_t>(remain / sqrt(remain) * 0.5f) % 2);
+      }
     }
   }
 }
