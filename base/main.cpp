@@ -318,7 +318,7 @@ void loop()
         strikes += status.strikes;
         lastStrike = now;
       }
-      if (status.state == ModuleState::DISARMED)
+      if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
         ++numDisarmed;
     }
     if (numDisarmed == moduleCount)

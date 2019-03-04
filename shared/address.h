@@ -23,6 +23,20 @@ namespace address
     DEADMAN
   };
   const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
+
+  const Address needy[] = {
+    DEADMAN
+  };
+
+  bool isNeedy(const Address module)
+  {
+    for (size_t i = 0; i < sizeof(needy) / sizeof(Address); ++i)
+    {
+      if (module == needy[i])
+        return true;
+    }
+    return false;
+  }
 };
 
 #endif
