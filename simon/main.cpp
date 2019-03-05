@@ -1,6 +1,11 @@
 #include <Arduino.h>
+#include <Wire.h>
+
+#include "shared/address.h"
+#include "shared/message.h"
 
 // outputs
+const uint8_t PIN_DISARMED_LED = 10;
 const uint8_t LED_R = 5;
 const uint8_t LED_G = 4;
 const uint8_t LED_Y = 3;
@@ -29,12 +34,13 @@ enum State
 {
   INITIAL,
   SHOWING,
-  WAITING,
-  COMPLETE
+  WAITING
 };
 
 State state;
 uint32_t start;
+
+Status status;
 
 void generateCode()
 {
@@ -42,10 +48,50 @@ void generateCode()
     code[i] = random(4);
 }
 
+void reset()
+{
+  status.state = ModuleState::READY;
+  status.strikes = 0;
+
+  generateCode();
+  state = INITIAL;
+  start = millis();
+}
+
+void receiveEvent(int count)
+{
+  if (count == 0)
+    return;
+
+  Message msg;
+  for (int i = 0; i < count; ++i)
+    reinterpret_cast<uint8_t*>(&msg)[i] = Wire.read();
+
+  switch (msg.opcode)
+  {
+    case OpCode::ARM:
+      status.state = ModuleState::ARMED;
+    break;
+    case OpCode::DEFUSED:
+    case OpCode::EXPLODED:
+      status.state = ModuleState::STOP;
+    break;
+    case OpCode::RESET:
+      reset();
+    break;
+    default:
+    break;
+  }
+}
+
+void requestEvent()
+{
+  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
+  status.strikes = 0;
+}
+
 void setup()
 {
-  Serial.begin(9600);
-
   // setup pins
   pinMode(LED_R, OUTPUT);
   pinMode(LED_G, OUTPUT);
@@ -65,20 +111,19 @@ void setup()
   // seed
   randomSeed(analogRead(PIN_SEED));
 
-  // generate our random code
-  generateCode();
+  Wire.begin(address::SIMON);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
 
-  Serial.print(code[0]);
-  Serial.print(code[1]);
-  Serial.print(code[2]);
-  Serial.println(code[3]);
-
-  state = INITIAL;
-  start = millis();
+  reset();
 }
 
 void loop()
 {
+  if (status.state != ModuleState::ARMED)
+    return;
+
+  digitalWrite(PIN_DISARMED_LED, 1);
   switch (state)
   {
     case INITIAL:
@@ -121,10 +166,6 @@ void loop()
     case WAITING:
       // just waiting for user input, nothing to do
     break;
-    case COMPLETE:
-      for (uint8_t i = 0; i < 4; ++i)
-        digitalWrite(LEDS[i], 0);
-    return;
   }
 
   for (uint8_t i = 0; i < 4; ++i)
@@ -134,7 +175,7 @@ void loop()
       while (digitalRead(PINS[i]));
       if (code[current] != i)
       {
-        Serial.println("STRIKE");
+        status.strikes = 1;
         start = millis();
         current = 0;
       }
@@ -152,15 +193,13 @@ void loop()
         }
       }
       state = SHOWING;
-      Serial.print("progress: ");
-      Serial.println(progress);
-      Serial.print("current: ");
-      Serial.println(current);
     }
   }
   if (progress == MAX_CODE_LENGTH)
   {
-    Serial.println("DISARMED");
-    state = COMPLETE;
+    status.state = ModuleState::DISARMED;
+    for (uint8_t i = 0; i < 4; ++i)
+      digitalWrite(LEDS[i], 0);
+    digitalWrite(PIN_DISARMED_LED, 0);
   }
 }
