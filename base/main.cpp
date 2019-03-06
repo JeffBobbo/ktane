@@ -13,6 +13,7 @@ const uint8_t PIN_SEED = A0; // for seeding rng
 // digital pins
 const uint8_t PIN_START = 5;
 const uint8_t PIN_RESET = 3;
+const uint8_t PIN_BUZZER = 4;
 
 // game state, and strikes
 BaseState state;
@@ -183,6 +184,7 @@ void screen()
       display.setCursor((128 - x2) / 2, 48);
       display.print("STRIKE");
     }
+    digitalWrite(PIN_BUZZER, lastStrike + 250 > millis());
   }
 
   display.setTextSize(2);
@@ -241,6 +243,8 @@ void reset()
 
 void setup()
 {
+  pinMode(PIN_BUZZER, OUTPUT);
+
   randomSeed(analogRead(PIN_SEED));
 
   Wire.begin();
