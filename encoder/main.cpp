@@ -13,7 +13,7 @@ const uint8_t NUM_STEPS = 20;
 // encoder
 const uint8_t PIN_CLK = 2;
 const uint8_t PIN_DT = 3;
-const uint8_t PIN_BUTTON = 10;
+const uint8_t PIN_BUTTON = 5;
 
 // defuse status
 const uint8_t PIN_DISARMED_LED = 4;
@@ -24,7 +24,7 @@ int8_t code[CODE_LENGTH] = {0};
 char version[VERSION_LENGTH+1] = {0};
 bool calibrated;
 
-Encoder encoder(2, 3);
+Encoder encoder(PIN_CLK, PIN_DT);
 
 Status status;
 
@@ -91,7 +91,7 @@ void setup()
 
   Wire.begin(address::SAFE);
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);  
+  Wire.onRequest(requestEvent);
 
   reset();
 }
