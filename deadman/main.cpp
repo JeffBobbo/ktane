@@ -43,6 +43,7 @@ void receiveEvent(int count)
   {
     case OpCode::ARM:
       status.state = ModuleState::ARMED;
+      released = millis() + COOLDOWN;
     break;
     case OpCode::DEFUSED:
     case OpCode::EXPLODED:
@@ -81,10 +82,7 @@ void setup()
 void loop()
 {
   if (status.state != ModuleState::ARMED)
-  {
-    released = millis() + COOLDOWN;
     return;
-  }
 
   if (digitalRead(PIN_SWITCH))
   {
