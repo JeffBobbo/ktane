@@ -2,6 +2,8 @@
 
 #include <LedControl.h>
 
+#include "paths.h"
+
 const uint8_t PIN_NORTH = 7;
 const uint8_t PIN_EAST = 6;
 const uint8_t PIN_SOUTH = 5;
@@ -11,25 +13,6 @@ const uint8_t PIN_DISARM_LED = 8;
 
 LedControl display = LedControl(12, 11, 10, 1);
 
-uint8_t path[36] = {
-  0 * 8 + 4,
-  1 * 8 + 4, 1 * 8 + 5,
-  2 * 8 + 5, 2 * 8 + 6,
-  3 * 8 + 6,
-  4 * 8 + 6, 4 * 8 + 7,
-  5 * 8 + 7,
-  6 * 8 + 7, 6 * 8 + 6, 6 * 8 + 5, 6 * 8 + 4,
-  5 * 8 + 4,
-  4 * 8 + 4, 4 * 8 + 3,
-  3 * 8 + 3,
-  2 * 8 + 3, 2 * 8 + 2, 2 * 8 + 1,
-  3 * 8 + 1, 3 * 8 + 0,
-  4 * 8 + 0,
-  5 * 8 + 0, 5 * 8 + 1,
-  6 * 8 + 1, 6 * 8 + 2,
-  7 * 8 + 2,
-  255
-};
 uint8_t progress = 0;
 
 void setup()
@@ -46,6 +29,10 @@ void setup()
 
   pinMode(PIN_DISARM_LED, OUTPUT);
   digitalWrite(PIN_DISARM_LED, 0);
+}
+
+void displayCell() {
+  display.setLed(0, path[progress] / 8, path[progress] % 8, true);
 }
 
 void displayMaze() {
@@ -90,7 +77,7 @@ void loop()
 
   if (progress != lastProgress)
   {
-    displayMaze();
+    displayCell();
     lastProgress = progress;
   }
 }
