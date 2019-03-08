@@ -2,7 +2,9 @@
 #include <Wire.h>
 
 #include "shared/address.h"
+#include "shared/config.h"
 #include "shared/message.h"
+#include "shared/util.h"
 
 // outputs
 const uint8_t PIN_DISARMED_LED = 10;
@@ -20,6 +22,8 @@ const uint8_t PIN_B = 6;
 const uint8_t PINS[] = {PIN_R, PIN_G, PIN_Y, PIN_B};
 
 const uint8_t PIN_SEED = 0;
+
+char version[VERSION_LENGTH+1] = {0};
 
 const uint8_t MAX_CODE_LENGTH = 4;
 uint8_t code[MAX_CODE_LENGTH] = {0};
@@ -48,9 +52,17 @@ void generateCode()
     code[i] = random(4);
 }
 
+uint8_t mapCode(const uint8_t value)
+{
+  if (util::countEvens(version) > 2)
+    return (value + 1) % 4;
+  return (value + 3) % 4;
+}
+
 void reset()
 {
-  status.state = ModuleState::READY;
+  if (status.state != ModuleState::READY)
+    status.state = ModuleState::INITIALISATION;
   status.strikes = 0;
 
   generateCode();
@@ -79,6 +91,9 @@ void receiveEvent(int count)
     case OpCode::RESET:
       reset();
     break;
+    case OpCode::VERSION:
+      strncpy(version, reinterpret_cast<char*>(msg.data), VERSION_LENGTH+1);
+      status.state = ModuleState::READY;
     default:
     break;
   }
@@ -173,7 +188,7 @@ void loop()
     if (digitalRead(PINS[i]))
     {
       while (digitalRead(PINS[i]));
-      if (code[current] != i)
+      if (code[current] != mapCode(i))
       {
         status.strikes = 1;
         start = millis();
