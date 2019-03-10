@@ -15,6 +15,17 @@ const uint8_t PIN_START = 5;
 const uint8_t PIN_RESET = 3;
 const uint8_t PIN_BUZZER = 4;
 
+const uint8_t PIN_BINARY_INDICATOR_BIT3 = 9;
+const uint8_t PIN_BINARY_INDICATOR_BIT2 = 8;
+const uint8_t PIN_BINARY_INDICATOR_BIT1 = 7;
+const uint8_t PIN_BINARY_INDICATOR_BIT0 = 6;
+const uint8_t PIN_BINARY_INDICATOR_BITS[] = {
+  PIN_BINARY_INDICATOR_BIT0,
+  PIN_BINARY_INDICATOR_BIT1,
+  PIN_BINARY_INDICATOR_BIT2,
+  PIN_BINARY_INDICATOR_BIT3
+};
+
 // game state, and strikes
 BaseState state;
 uint8_t strikes;
@@ -31,6 +42,8 @@ uint32_t STRIKE_TIME = 1000;
 Address modules[address::NUM_MODULES];
 size_t moduleCount;
 char version[VERSION_LENGTH+1];
+
+uint8_t bindicator;
 
 Adafruit_SSD1306 display(128, 64);
 
@@ -215,6 +228,9 @@ void reset()
   state = BaseState::INITIALISATION;
   // generate random version hash
   generate();
+  bindicator = random(15);
+  for (uint8_t i = 0; i < 4; ++i)
+    digitalWrite(PIN_BINARY_INDICATOR_BITS[i], (bindicator >> i) & 1);
 
   // scan for modules on the bus
   // delay to ensure they're all powered up
