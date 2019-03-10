@@ -110,17 +110,6 @@ void display_strikes()
 }
 
 
-size_t broadcast(uint8_t data)
-{
-  for (uint8_t i = 0; i < sizeof(modules); ++i)
-  {
-    Wire.beginTransmission(modules[i]);
-    Wire.write(data);
-    Wire.endTransmission();
-  }
-  return 1;
-}
-
 size_t broadcast(const uint8_t* const data, const size_t len)
 {
   for (size_t i = 0; i < moduleCount; ++i)
