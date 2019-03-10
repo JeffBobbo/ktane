@@ -14,6 +14,9 @@ const uint8_t LED_Y = 3;
 const uint8_t LED_B = 2;
 const uint8_t LEDS[] = {LED_R, LED_G, LED_Y, LED_B};
 
+const uint8_t PIN_BUZZER = 12;
+const uint16_t TONES[] = {587, 659, 698, 784};
+
 // inputs
 const uint8_t PIN_R = 9;
 const uint8_t PIN_G = 8;
@@ -112,6 +115,7 @@ void setup()
   pinMode(LED_G, OUTPUT);
   pinMode(LED_Y, OUTPUT);
   pinMode(LED_B, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
 
   digitalWrite(LED_R, 0);
   digitalWrite(LED_G, 0);
@@ -175,7 +179,10 @@ void loop()
         show = 3;
 
       if (show < MAX_CODE_LENGTH)
+      {
         digitalWrite(LEDS[code[show]], 1);
+        tone(PIN_BUZZER, TONES[code[show]], FLASH_TIME);
+      }
     }
     break;
     case WAITING:
