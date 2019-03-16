@@ -1,6 +1,10 @@
 #include <Arduino.h>
+#include <Wire.h>
 
 #include <LedControl.h>
+
+#include "shared/address.h"
+#include "shared/message.h"
 
 #include "paths.h"
 
@@ -11,13 +15,60 @@ const uint8_t PIN_WEST = 4;
 
 const uint8_t PIN_SEED = A0;
 
-const uint8_t PIN_DISARM_LED = 8;
+const uint8_t PIN_DISARMED_LED = 8;
 
 LedControl display = LedControl(12, 11, 10, 1);
 
-uint8_t progress = 0;
+uint8_t progress;
 
 Path path;
+
+Status status;
+
+void reset()
+{
+  display.clearDisplay(0);
+
+  progress = 0;
+  path = paths[random(NUM_PATHS)];
+
+  status.state = ModuleState::READY;
+  status.strikes = 0;
+  digitalWrite(PIN_DISARMED_LED, 1);
+}
+
+void receiveEvent(int count)
+{
+  if (count == 0)
+    return;
+
+  Message msg;
+
+  for (int i = 0; i < count; ++i)
+    reinterpret_cast<uint8_t*>(&msg)[i] = Wire.read();
+
+  switch (msg.opcode)
+  {
+    case OpCode::ARM:
+      status.state = ModuleState::ARMED;
+    break;
+    case OpCode::DEFUSED:
+    case OpCode::EXPLODED:
+      status.state = ModuleState::STOP;
+    break;
+    case OpCode::RESET:
+      reset();
+    break;
+    default:
+    break;
+  }
+}
+
+void requestEvent()
+{
+  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
+  status.strikes = 0;
+}
 
 void setup()
 {
@@ -33,10 +84,13 @@ void setup()
   pinMode(PIN_SOUTH, INPUT);
   pinMode(PIN_WEST, INPUT);
 
-  pinMode(PIN_DISARM_LED, OUTPUT);
-  digitalWrite(PIN_DISARM_LED, 0);
+  pinMode(PIN_DISARMED_LED, OUTPUT);
 
-  path = paths[random(NUM_PATHS)];
+  Wire.begin(address::MINEFIELD);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+
+  reset();
 }
 
 void displayCell() {
@@ -52,10 +106,11 @@ void displayMaze() {
 uint8_t lastProgress = 255;
 void loop()
 {
+  if (status.state != ModuleState::ARMED)
+    return;
+
   uint8_t cell;
   bool pressed = false;
-  if (progress == path.length - 1)
-    return;
 
   if (digitalRead(PIN_NORTH))
   {
@@ -84,13 +139,16 @@ void loop()
   if (pressed)
   {
     if (cell == path.path[progress+1])
-      ++progress;
+    {
+      if (++progress == path.length - 1)
+      {
+        status.state = ModuleState::DISARMED;
+        digitalWrite(PIN_DISARMED_LED, 0);
+      }
+    }
     else
     {
-      digitalWrite(PIN_DISARM_LED, 1);
-      delay(500);
-      digitalWrite(PIN_DISARM_LED, 0);
-      delay(500);
+      status.strikes = 1;
     }
   }
 

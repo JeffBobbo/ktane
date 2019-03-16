@@ -12,6 +12,7 @@ namespace address
   const Address SAFE = 9;
   const Address SIMON = 10;
   const Address DEADMAN = 11;
+  const Address MINEFIELD = 12;
 
   // extra peripherals
   const Address OLED_DISPLAY = 0x3C; // 60
@@ -20,7 +21,8 @@ namespace address
   const Address modules[] = {
     SAFE,
     SIMON,
-    DEADMAN
+    DEADMAN,
+    MINEFIELD
   };
   const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
 

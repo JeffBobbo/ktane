@@ -125,7 +125,7 @@ Cell path5[] = {
   _cell(3, 6),
   _cell(3, 7)
 };
-Cell path6 = {
+Cell path6[] = {
   _cell(6, 0),
   _cell(6, 1),
   _cell(6, 2),
@@ -144,7 +144,7 @@ Cell path6 = {
   _cell(1, 6),
   _cell(1, 7)
 };
-Cell path7 = {
+Cell path7[] = {
   _cell(7, 0),
   _cell(6, 0),
   _cell(6, 1),
