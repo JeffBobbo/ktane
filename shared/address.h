@@ -16,6 +16,7 @@ namespace address
 
   // extra peripherals
   const Address OLED_DISPLAY = 0x3C; // 60
+  const Address INDICATORS = 61;
 
   // a list of modules we should broadcast to
   const Address modules[] = {

@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <Wire.h>
+
+#include <TM1637Display.h>
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -11,20 +14,36 @@
 const uint8_t PIN_SEED = A0; // for seeding rng
 
 // digital pins
-const uint8_t PIN_START = 5;
-const uint8_t PIN_RESET = 3;
-const uint8_t PIN_BUZZER = 4;
+const uint8_t PIN_CLK = 3;
+const uint8_t PIN_DIO = 2;
 
-const uint8_t PIN_BINARY_INDICATOR_BIT3 = 9;
-const uint8_t PIN_BINARY_INDICATOR_BIT2 = 8;
-const uint8_t PIN_BINARY_INDICATOR_BIT1 = 7;
-const uint8_t PIN_BINARY_INDICATOR_BIT0 = 6;
-const uint8_t PIN_BINARY_INDICATOR_BITS[] = {
-  PIN_BINARY_INDICATOR_BIT0,
-  PIN_BINARY_INDICATOR_BIT1,
-  PIN_BINARY_INDICATOR_BIT2,
-  PIN_BINARY_INDICATOR_BIT3
-};
+const uint8_t PIN_START = 4;
+const uint8_t PIN_RESET = 5;
+
+TM1637Display countdown(PIN_CLK, PIN_DIO);
+
+//const uint8_t PIN_CLOCK = 11;
+//const uint8_t PIN_LATCH = 10;
+//const uint8_t PIN_DATA  = 9;
+
+//const uint8_t PIN_STRIKE_0 = 8;
+//const uint8_t PIN_STRIKE_1 = 7;
+//const uint8_t PIN_STRIKE_2 = 6;
+
+// const uint8_t PIN_DIGIT_3 = 5;
+// const uint8_t PIN_DIGIT_2 = 2;
+// const uint8_t PIN_DIGIT_1 = 3;
+// const uint8_t PIN_DIGIT_0 = 4;
+// const uint8_t PIN_DIGITS[] = {
+//   PIN_DIGIT_3,
+//   PIN_DIGIT_2,
+//   PIN_DIGIT_1,
+//   PIN_DIGIT_0
+// };
+ const uint8_t PIN_BUZZER = 11;
+ const uint8_t PIN_RELAY = 6;
+
+//const uint8_t SEG_TABLE[] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71};
 
 // game state, and strikes
 BaseState state;
@@ -44,8 +63,9 @@ size_t moduleCount;
 char version[VERSION_LENGTH+1];
 
 uint8_t bindicator;
+uint8_t nindicator;
 
-Adafruit_SSD1306 display(128, 64);
+Adafruit_SSD1306 display(128, 32);
 
 void display_state()
 {
@@ -73,55 +93,19 @@ void display_state()
   }
 
   display.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-  display.setCursor((128 - x2) / 2, 16);
+  display.setCursor((128 - x2) / 2, (32 -y2) / 2);
   display.print(str);
 }
 
 void display_timeRemaining()
 {
   const uint32_t remaining = (start + TIME_ALLOWED) - (end ? end : now);
-  int16_t x1, y1;
-  uint16_t x2, y2;
 
-  String str;
   uint32_t m = (remaining / 1000) / 60;
   uint32_t s = (remaining / 1000) % 60;
-  uint32_t cs = (remaining / 10) % 100;
-  if (m < 10)
-    str += '0';
-  str += m;
-  str += ':';
-  if (s < 10)
-    str += '0';
-  str += s;
-  str += '.';
-  if (cs < 10)
-    str += '0';
-  str += cs;
 
-  display.setTextSize(2);
-  display.getTextBounds(str.c_str(), 0, 0, &x1, &y1, &x2, &y2);
-  display.setCursor((128 - x2) / 2, 32);
-  display.print(str.c_str());
+  countdown.showNumberDecEx(m * 100 + s, remaining / 500 & 1 ? 0b01000000 : 0, true);
 }
-
-void display_strikes()
-{
-  char str[MAX_STRIKES+1] = {0};
-  for (uint8_t i = 0; i < strikes; ++i)
-    str[i] = 'X';
-  for (uint8_t i = strikes; i < MAX_STRIKES; ++i)
-    str[i] = ' ';
-
-  int16_t x1, y1;
-  uint16_t x2, y2;
-
-  display.setTextSize(2);
-  display.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-  display.setCursor(128 - x2, 48);
-  display.print(str);
-}
-
 
 size_t broadcast(const uint8_t* const data, const size_t len)
 {
@@ -168,30 +152,23 @@ void screen()
   int16_t x1, y1;
   uint16_t x2, y2;
 
-  display.setTextSize(2);
-  display.getTextBounds(version, 0, 0, &x1, &y1, &x2, &y2);
-  display.setCursor((128 - x2) / 2, 0);
-  display.print(version);
 
-  display_state();
 
   if (state != BaseState::READY)
   {
+    display.setTextSize(2);
+    display.getTextBounds(version, 0, 0, &x1, &y1, &x2, &y2);
+    display.setCursor((128 - x2) / 2, (32 - y2) / 2);
+    display.print(version);
+
     display_timeRemaining();
-    display_strikes();
 
-    if (lastStrike + STRIKE_TIME > millis())
-    {
-      display.getTextBounds("STRIKE", 0, 0, &x1, &y1, &x2, &y2);
-      display.setCursor((128 - x2) / 2, 48);
-      display.print("STRIKE");
-    }
-    digitalWrite(PIN_BUZZER, lastStrike + 250 > millis());
+    digitalWrite(PIN_BUZZER, lastStrike + STRIKE_TIME > millis());
   }
-
-  display.setTextSize(2);
-  display.setCursor(0, 48);
-  display.print(moduleCount);
+  else
+  {
+    display_state();
+  }
 
   display.display();
 }
@@ -211,6 +188,19 @@ void generate()
   version[VERSION_LENGTH] = 0;
 }
 
+void indicate()
+{
+  Indicators indicators;
+  indicators.numerical = nindicator;
+  indicators.binary = bindicator;
+  indicators.strikes = strikes;
+  indicators.state = state;
+
+  Wire.beginTransmission(address::INDICATORS);
+  Wire.write(reinterpret_cast<uint8_t*>(&indicators), sizeof(indicators));
+  Wire.endTransmission();
+}
+
 void reset()
 {
   Message rmsg(OpCode::RESET);
@@ -228,9 +218,9 @@ void reset()
   state = BaseState::INITIALISATION;
   // generate random version hash
   generate();
+
   bindicator = random(15);
-  for (uint8_t i = 0; i < 4; ++i)
-    digitalWrite(PIN_BINARY_INDICATOR_BITS[i], (bindicator >> i) & 1);
+  nindicator = random(9);
 
   // scan for modules on the bus
   // delay to ensure they're all powered up
@@ -239,6 +229,7 @@ void reset()
 
   // write to the screen once, since loop will block writes until all modules are ready
   screen();
+  indicate();
 
   // transmit version info to all
   Message vmsg(OpCode::VERSION);
@@ -248,9 +239,15 @@ void reset()
 
 void setup()
 {
+  countdown.setBrightness(0x01);
+
   pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_RELAY, OUTPUT);
+  pinMode(PIN_START, INPUT);
+  pinMode(PIN_RESET, INPUT);
 
   randomSeed(analogRead(PIN_SEED));
+
 
   Wire.begin();
 
@@ -338,9 +335,10 @@ void loop()
       Message tmsg(OpCode::DEFUSED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
+    indicate();
   }
 
-  if (state == BaseState::DEFUSED || state == BaseState::EXPLODED)
+  if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED)
   {
     if (digitalRead(PIN_RESET))
     {

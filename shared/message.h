@@ -38,4 +38,12 @@ struct Status
   uint8_t strikes;
 };
 
+struct Indicators
+{
+  uint8_t numerical;
+  uint8_t binary;
+  uint8_t strikes;
+  BaseState state;
+};
+
 #endif
