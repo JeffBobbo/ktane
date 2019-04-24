@@ -30,8 +30,8 @@ char version[VERSION_LENGTH+1] = {0};
 
 const uint8_t MAX_CODE_LENGTH = 4;
 uint8_t code[MAX_CODE_LENGTH] = {0};
-uint8_t current = 0; // current button we're pressing for
-uint8_t progress = 0; // our total progress (i.e., how many to flash)
+uint8_t current; // current button we're pressing for
+uint8_t progress; // our total progress (i.e., how many to flash)
 
 const uint32_t FLASH_TIME = 500;
 const uint32_t PAUSE_TIME = 500;
@@ -67,6 +67,9 @@ void reset()
   if (status.state != ModuleState::READY)
     status.state = ModuleState::INITIALISATION;
   status.strikes = 0;
+
+  current = 0;
+  progress = 0;
 
   generateCode();
   state = INITIAL;
