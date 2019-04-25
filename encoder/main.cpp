@@ -13,7 +13,7 @@ const uint8_t NUM_STEPS = 20;
 // encoder
 const uint8_t PIN_CLK = 2;
 const uint8_t PIN_DT = 3;
-const uint8_t PIN_BUTTON = 5;
+const uint8_t PIN_BUTTON = 4;
 
 // defuse status
 const uint8_t PIN_DISARMED_LED = 4;
