@@ -78,6 +78,11 @@ namespace util
     return countOdds(str);
   }
 
+  uint8_t countNumbers(const char* const str)
+  {
+    return countEvens(str) + countOdds(str);
+  }
+
   int sum(const char* const str)
   {
     const size_t len = strlen(str);
