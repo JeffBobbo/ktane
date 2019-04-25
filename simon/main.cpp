@@ -35,7 +35,7 @@ uint8_t progress; // our total progress (i.e., how many to flash)
 
 const uint32_t FLASH_TIME = 500;
 const uint32_t PAUSE_TIME = 500;
-const uint32_t REPEAT_TIME = 2500;
+const uint32_t REPEAT_TIME = 5000;
 
 enum State
 {
@@ -57,7 +57,7 @@ void generateCode()
 
 uint8_t mapCode(const uint8_t value)
 {
-  if (util::countEvens(version) > 2)
+  if (util::countNumbers(version) > 4)
     return (value + 1) % 4;
   return (value + 3) % 4;
 }
@@ -72,8 +72,7 @@ void reset()
   progress = 0;
 
   generateCode();
-  state = INITIAL;
-  start = millis();
+  state = SHOWING;
 }
 
 void receiveEvent(int count)
@@ -89,6 +88,7 @@ void receiveEvent(int count)
   {
     case OpCode::ARM:
       status.state = ModuleState::ARMED;
+      start = millis() + 2500;
     break;
     case OpCode::DEFUSED:
     case OpCode::EXPLODED:
@@ -148,43 +148,27 @@ void loop()
   digitalWrite(PIN_DISARMED_LED, 1);
   switch (state)
   {
-    case INITIAL:
-      digitalWrite(LEDS[code[0]], (millis() % (FLASH_TIME + REPEAT_TIME)) < FLASH_TIME);
-    break;
     case SHOWING:
     {
-      // turn the LEDs off
-      for (uint8_t i = 0; i < 4; ++i)
-        digitalWrite(LEDS[i], 0);
+      const uint32_t period = (progress+1) * (FLASH_TIME + PAUSE_TIME) + REPEAT_TIME;
 
-      const uint32_t period = PAUSE_TIME + (progress+1) * (FLASH_TIME + PAUSE_TIME);
-      const uint32_t now = millis() - start;
-      if (now > period) // if we're done, go to WAITING
+      const uint32_t now = (millis() - start) % period;
+      if (now < period - REPEAT_TIME)
       {
-        state = WAITING;
-        return;
-      }
+        const uint32_t led = now / (FLASH_TIME + PAUSE_TIME);
 
-      // calculate which one to show
-      uint8_t show = MAX_CODE_LENGTH;
-      if (now < PAUSE_TIME)
-        show = 4;
-      else if (now < PAUSE_TIME + FLASH_TIME)
-        show = 0;
-      else if (now > FLASH_TIME + 2 * PAUSE_TIME &&
-               now < FLASH_TIME + 2 * PAUSE_TIME + FLASH_TIME)
-        show = 1;
-      else if (now > 2 * (FLASH_TIME + PAUSE_TIME) + PAUSE_TIME &&
-               now < 3 * (FLASH_TIME + PAUSE_TIME))
-        show = 2;
-      else if (now > 3 * (FLASH_TIME + PAUSE_TIME) + PAUSE_TIME &&
-               now < 4 * (FLASH_TIME + PAUSE_TIME))
-        show = 3;
-
-      if (show < MAX_CODE_LENGTH)
-      {
-        digitalWrite(LEDS[code[show]], 1);
-        tone(PIN_BUZZER, TONES[code[show]], FLASH_TIME);
+        if (now % (FLASH_TIME + PAUSE_TIME) < FLASH_TIME)
+        {
+          digitalWrite(LEDS[code[led]], 1);
+          tone(PIN_BUZZER, TONES[code[led]]);
+        }
+        else
+        {
+          // turn the LEDs off
+          for (uint8_t i = 0; i < 4; ++i)
+            digitalWrite(LEDS[i], 0);
+          noTone(PIN_BUZZER);
+        }
       }
     }
     break;
@@ -198,6 +182,7 @@ void loop()
     if (digitalRead(PINS[i]))
     {
       while (digitalRead(PINS[i]));
+      state = WAITING;
       if (code[current] != mapCode(i))
       {
         status.strikes = 1;
@@ -211,13 +196,13 @@ void loop()
           current = 0;
           ++progress;
           start = millis();
+          state = SHOWING;
         }
         else
         {
           ++current;
         }
       }
-      state = SHOWING;
     }
   }
   if (progress == MAX_CODE_LENGTH)
