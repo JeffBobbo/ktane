@@ -39,7 +39,6 @@ const uint32_t REPEAT_TIME = 5000;
 
 enum State
 {
-  INITIAL,
   SHOWING,
   WAITING
 };
@@ -75,6 +74,14 @@ void reset()
   state = SHOWING;
 }
 
+void stop()
+{
+  // turn the LEDs off
+  for (uint8_t i = 0; i < 4; ++i)
+    digitalWrite(LEDS[i], 0);
+  noTone(PIN_BUZZER);
+}
+
 void receiveEvent(int count)
 {
   if (count == 0)
@@ -93,6 +100,7 @@ void receiveEvent(int count)
     case OpCode::DEFUSED:
     case OpCode::EXPLODED:
       status.state = ModuleState::STOP;
+      stop();
     break;
     case OpCode::RESET:
       reset();
@@ -164,10 +172,7 @@ void loop()
         }
         else
         {
-          // turn the LEDs off
-          for (uint8_t i = 0; i < 4; ++i)
-            digitalWrite(LEDS[i], 0);
-          noTone(PIN_BUZZER);
+          stop();
         }
       }
     }
