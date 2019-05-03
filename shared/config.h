@@ -1,6 +1,6 @@
 #ifndef CONFIG_H_INCLUDE
 #define CONFIG_H_INCLUDE
 
-const size_t VERSION_LENGTH = 8;
+const size_t SERIAL_LENGTH = 8;
 
 #endif

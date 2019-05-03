@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "opcode.h"
+#include "config.h"
 
 struct Message
 {
@@ -43,7 +44,7 @@ struct Indicators
   uint8_t numerical;
   uint8_t binary;
   uint8_t strikes;
-  BaseState state;
+  char serial[SERIAL_LENGTH];
 };
 
 #endif

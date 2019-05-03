@@ -1,9 +1,7 @@
-#include <Arduino.h>
-#include <Wire.h>
+#define UTILITY_MODULE
+#include "shared/module.h"
 
-#include "shared/address.h"
-#include "shared/message.h"
-
+const Address addr = address::INDICATORS;
 
 const uint8_t PIN_STRIKE_0 = 2;
 const uint8_t PIN_STRIKE_1 = 3;
@@ -42,21 +40,9 @@ void display(const Indicators& indicators)
   digitalWrite(PIN_BINARY_3, indicators.binary & 0b1000);
 
   segment(indicators.numerical);
-
-  digitalWrite(PIN_DEFUSED, indicators.state == BaseState::DEFUSED);
-  digitalWrite(PIN_EXPLODED, indicators.state == BaseState::EXPLODED);
 }
 
-void receiveEvent(int count)
-{
-  Indicators indicators;
-  for (size_t i = 0; i < count; ++i)
-    reinterpret_cast<uint8_t*>(&indicators)[i] = Wire.read();
-
-  display(indicators);
-}
-
-void setup()
+void initialise()
 {
   pinMode(PIN_CLOCK, OUTPUT);
   pinMode(PIN_LATCH, OUTPUT);
@@ -74,6 +60,11 @@ void setup()
   pinMode(PIN_DEFUSED, OUTPUT);
   pinMode(PIN_EXPLODED, OUTPUT);
 
+  reset();
+}
+
+void reset()
+{
   digitalWrite(PIN_STRIKE_0, 0);
   digitalWrite(PIN_STRIKE_1, 0);
   digitalWrite(PIN_STRIKE_2, 0);
@@ -85,10 +76,29 @@ void setup()
 
   segment(255);
 
-  Wire.begin(address::INDICATORS);
-  Wire.onReceive(receiveEvent);
+  digitalWrite(PIN_DEFUSED, 0);
+  digitalWrite(PIN_EXPLODED, 0);
 }
 
-void loop()
+void onIndicators()
 {
+  display(indicators);
+}
+
+void arm()
+{
+}
+
+void idle()
+{
+}
+
+void defuse()
+{
+  digitalWrite(PIN_DEFUSED, 1);
+}
+
+void detonate()
+{
+  digitalWrite(PIN_EXPLODED, 1);
 }

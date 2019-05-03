@@ -10,7 +10,7 @@ enum class OpCode : uint8_t
   DEFUSED, // instructs a module to stop because it's been defused
   EXPLODED, // instructs a module to stop because it's exploded
   RESET, // modules should reset
-  VERSION // xfer of version string
+  INDICATORS // xfer of indicators
 };
 
 String toString(const OpCode op)
@@ -23,8 +23,10 @@ String toString(const OpCode op)
       return "DEFUSED";
     case OpCode::EXPLODED:
       return "EXPLODED";
-    case OpCode::VERSION:
-      return "VERSION";
+    case OpCode::RESET:
+      return "RESET";
+    case OpCode::INDICATORS:
+      return "INDICATORS";
   }
   return "???";
 }
