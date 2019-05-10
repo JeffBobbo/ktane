@@ -22,28 +22,8 @@ const uint8_t PIN_RESET = 5;
 
 TM1637Display countdown(PIN_CLK, PIN_DIO);
 
-//const uint8_t PIN_CLOCK = 11;
-//const uint8_t PIN_LATCH = 10;
-//const uint8_t PIN_DATA  = 9;
-
-//const uint8_t PIN_STRIKE_0 = 8;
-//const uint8_t PIN_STRIKE_1 = 7;
-//const uint8_t PIN_STRIKE_2 = 6;
-
-// const uint8_t PIN_DIGIT_3 = 5;
-// const uint8_t PIN_DIGIT_2 = 2;
-// const uint8_t PIN_DIGIT_1 = 3;
-// const uint8_t PIN_DIGIT_0 = 4;
-// const uint8_t PIN_DIGITS[] = {
-//   PIN_DIGIT_3,
-//   PIN_DIGIT_2,
-//   PIN_DIGIT_1,
-//   PIN_DIGIT_0
-// };
  const uint8_t PIN_BUZZER = 11;
  const uint8_t PIN_RELAY = 6;
-
-//const uint8_t SEG_TABLE[] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71};
 
 // game state, and strikes
 BaseState state;
@@ -60,7 +40,7 @@ uint32_t STRIKE_TIME = 1000;
 
 Address modules[address::NUM_MODULES];
 size_t moduleCount;
-char version[VERSION_LENGTH+1];
+char serial[SERIAL_LENGTH+1];
 
 uint8_t bindicator;
 uint8_t nindicator;
@@ -152,14 +132,12 @@ void screen()
   int16_t x1, y1;
   uint16_t x2, y2;
 
-
-
   if (state != BaseState::READY)
   {
     display.setTextSize(2);
-    display.getTextBounds(version, 0, 0, &x1, &y1, &x2, &y2);
+    display.getTextBounds(serial, 0, 0, &x1, &y1, &x2, &y2);
     display.setCursor((128 - x2) / 2, (32 - y2) / 2);
-    display.print(version);
+    display.print(serial);
 
     display_timeRemaining();
 
@@ -175,30 +153,37 @@ void screen()
 
 void generate()
 {
-  for (uint8_t i = 0; i < VERSION_LENGTH; ++i)
+  for (uint8_t i = 0; i < SERIAL_LENGTH; ++i)
   {
     const uint8_t c = random(46);
     if (c < 26)
-      version[i] = 'a' + c;
+      serial[i] = 'a' + c;
     else if (c < 46)
-      version[i] = '0' + (c - 26) % 10;
+      serial[i] = '0' + (c - 26) % 10;
     else
-      version[i] = '?';
+      serial[i] = '?';
   }
-  version[VERSION_LENGTH] = 0;
+  serial[SERIAL_LENGTH] = 0;
 }
 
 void indicate()
 {
+  Message msg;
+  msg.opcode = OpCode::INDICATORS;
+
   Indicators indicators;
   indicators.numerical = nindicator;
   indicators.binary = bindicator;
   indicators.strikes = strikes;
-  indicators.state = state;
+  strncpy(reinterpret_cast<char*>(indicators.serial), serial, SERIAL_LENGTH+1);
+
+  memcpy(msg.data, &indicators, sizeof(indicators));
 
   Wire.beginTransmission(address::INDICATORS);
-  Wire.write(reinterpret_cast<uint8_t*>(&indicators), sizeof(indicators));
+  Wire.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
   Wire.endTransmission();
+
+  broadcast(msg);
 }
 
 void reset()
@@ -213,10 +198,10 @@ void reset()
 
   memset(modules, 0, address::NUM_MODULES);
   moduleCount = 0;
-  memset(version, 0, VERSION_LENGTH+1);
+  memset(serial, 0, SERIAL_LENGTH+1);
 
   state = BaseState::INITIALISATION;
-  // generate random version hash
+  // generate random serial hash
   generate();
 
   bindicator = random(15);
@@ -229,12 +214,9 @@ void reset()
 
   // write to the screen once, since loop will block writes until all modules are ready
   screen();
-  indicate();
 
-  // transmit version info to all
-  Message vmsg(OpCode::VERSION);
-  strncpy(reinterpret_cast<char*>(vmsg.data), version, VERSION_LENGTH+1);
-  broadcast(vmsg);
+  // transmit info to all
+  indicate();
 }
 
 void setup()
@@ -323,6 +305,7 @@ void loop()
       {
         strikes += status.strikes;
         lastStrike = now;
+        indicate();
       }
       if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
         ++numDisarmed;
@@ -335,7 +318,6 @@ void loop()
       Message tmsg(OpCode::DEFUSED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
-    indicate();
   }
 
   if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED)

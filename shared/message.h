@@ -44,7 +44,7 @@ struct Indicators
   uint8_t numerical;
   uint8_t binary;
   uint8_t strikes;
-  char serial[SERIAL_LENGTH];
+  char serial[SERIAL_LENGTH+1];
 };
 
 #endif

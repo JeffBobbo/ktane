@@ -7,7 +7,7 @@
 #include <Encoder.h>
 
 const Address addr = address::SAFE;
-const uint8_t PIN_DISARM_LED = 4;
+const uint8_t PIN_DISARM_LED = 5;
 
 const uint8_t NUM_STEPS = 20;
 
@@ -47,7 +47,8 @@ void onIndicators()
   code[0] = util::countEvens(indicators.serial) + util::countOdds(indicators.serial);
   code[1] = code[0] - (util::hasEvens(indicators.serial) ? 10 : 5);
   code[2] = code[1] + (util::hasVowels(indicators.serial) ? 7 : 13);
-  state = ModuleState::READY;
+  if (state == ModuleState::INITIALISATION)
+    state = ModuleState::READY;
 }
 
 void arm()
@@ -61,6 +62,9 @@ void idle()
     while (!digitalRead(PIN_BUTTON));
     if (calibrated)
     {
+      Serial.print(encoder.read() / 4);
+      Serial.print(" == ");
+      Serial.println(code[index]);
       if (code[index] != encoder.read() / 4)
       {
         strikes = 1;

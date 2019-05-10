@@ -78,8 +78,8 @@ void receiveEvent(int count)
 
 void requestEvent()
 {
-  Wire.write(reinterpret_cast<uint8_t*>(&state), sizeof(state));
-  Wire.write(strikes);
+  Status status = {state, strikes};
+  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
 
   // reset this to zero once it's been sent
   strikes = 0;
@@ -87,6 +87,8 @@ void requestEvent()
 
 void setup()
 {
+  Serial.begin(9600);
+
   // setup comms
   Wire.begin(addr);
   Wire.onReceive(receiveEvent);
