@@ -9,6 +9,7 @@
 #include "opcode.h"
 
 void disarm();
+void strike();
 
 void initialise();
 void reset();
@@ -35,7 +36,10 @@ void disarm()
   #endif
 }
 
-
+void strike()
+{
+  ++strikes;
+}
 
 void receiveEvent(int count)
 {
