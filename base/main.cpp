@@ -22,7 +22,8 @@ const uint8_t PIN_RESET = 5;
 
 TM1637Display countdown(PIN_CLK, PIN_DIO);
 
- const uint8_t PIN_BUZZER = 11;
+ const uint8_t PIN_BUZZER_STRIKE = 11;
+ const uint8_t PIN_BUZZER_DISARM = 13;
  const uint8_t PIN_RELAY = 6;
 
 // game state, and strikes
@@ -36,7 +37,9 @@ uint32_t start;
 uint32_t end;
 uint32_t now;
 uint32_t lastStrike;
-uint32_t STRIKE_TIME = 1000;
+uint32_t lastDisarm;
+uint32_t STRIKE_BUZZ_TIME = 300;
+uint32_t DISARM_BUZZ_TIME = 200;
 
 Address modules[address::NUM_MODULES];
 size_t moduleCount;
@@ -95,6 +98,11 @@ size_t broadcast(const uint8_t* const data, const size_t len)
     Wire.write(data, len);
     Wire.endTransmission();
   }
+
+  Wire.beginTransmission(address::INDICATORS);
+  Wire.write(data, len);
+  Wire.endTransmission();
+
   return len;
 }
 
@@ -140,8 +148,6 @@ void screen()
     display.print(serial);
 
     display_timeRemaining();
-
-    digitalWrite(PIN_BUZZER, lastStrike + STRIKE_TIME > millis());
   }
   else
   {
@@ -179,10 +185,6 @@ void indicate()
 
   memcpy(msg.data, &indicators, sizeof(indicators));
 
-  Wire.beginTransmission(address::INDICATORS);
-  Wire.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
-  Wire.endTransmission();
-
   broadcast(msg);
 }
 
@@ -195,6 +197,7 @@ void reset()
   now = 0;
   strikes = 0;
   lastStrike = 0;
+  lastDisarm = 0;
 
   memset(modules, 0, address::NUM_MODULES);
   moduleCount = 0;
@@ -223,7 +226,8 @@ void setup()
 {
   countdown.setBrightness(0x01);
 
-  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_BUZZER_STRIKE, OUTPUT);
+  pinMode(PIN_BUZZER_DISARM, OUTPUT);
   pinMode(PIN_RELAY, OUTPUT);
   pinMode(PIN_START, INPUT);
   pinMode(PIN_RESET, INPUT);
@@ -288,16 +292,23 @@ void loop()
     broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
   }
 
+
   if (state == BaseState::ARMED)
   {
+    digitalWrite(PIN_BUZZER_STRIKE, lastStrike + STRIKE_BUZZ_TIME > millis());
+    digitalWrite(PIN_BUZZER_DISARM, lastDisarm + DISARM_BUZZ_TIME > millis());
+
     if (start + TIME_ALLOWED < now || strikes >= MAX_STRIKES)
     {
       state = BaseState::EXPLODED;
       end = now;
+      digitalWrite(PIN_BUZZER_STRIKE, 0);
+      digitalWrite(PIN_BUZZER_DISARM, 0);
       Message tmsg(OpCode::EXPLODED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
     size_t numDisarmed = 0;
+    static size_t lastNumDisarmed = 0;
     for (size_t i = 0; i < moduleCount; ++i)
     {
       Status status = report(modules[i]);
@@ -310,10 +321,17 @@ void loop()
       if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
         ++numDisarmed;
     }
+    if (lastNumDisarmed != numDisarmed && numDisarmed != 0)
+    {
+      lastDisarm = now;
+      lastNumDisarmed = numDisarmed;
+    }
     if (numDisarmed == moduleCount)
     {
       state = BaseState::DEFUSED;
       end = now;
+      digitalWrite(PIN_BUZZER_STRIKE, 0);
+      digitalWrite(PIN_BUZZER_DISARM, 0);
 
       Message tmsg(OpCode::DEFUSED);
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
