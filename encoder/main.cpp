@@ -44,11 +44,13 @@ void reset()
 
 void onIndicators()
 {
-  code[0] = util::countEvens(indicators.serial) + util::countOdds(indicators.serial);
-  code[1] = code[0] - (util::hasEvens(indicators.serial) ? 10 : 5);
-  code[2] = code[1] + (util::hasVowels(indicators.serial) ? 7 : 13);
   if (state == ModuleState::INITIALISATION)
+  {
+    code[0] = util::countEvens(indicators.serial) + util::countOdds(indicators.serial);
+    code[1] = code[0] - (util::hasEvens(indicators.serial) ? 10 : 5);
+    code[2] = code[1] + (util::hasVowels(indicators.serial) ? 7 : 13);
     state = ModuleState::READY;
+  }
 }
 
 void arm()
@@ -67,7 +69,7 @@ void idle()
       Serial.println(code[index]);
       if (code[index] != encoder.read() / 4)
       {
-        strikes = 1;
+        strike();
       }
       else
       {
