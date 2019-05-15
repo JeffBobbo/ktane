@@ -46,12 +46,10 @@ void reset()
 
 void onIndicators()
 {
-  // replace this to be done from information
+  user = (indicators.numerical + indicators.binary + indicators.strikes + util::sum(indicators.serial)) % 24;
+
   if (state == ModuleState::INITIALISATION)
-  {
-    user = 6;
     state = ModuleState::READY;
-  }
 }
 
 void arm()
