@@ -1,8 +1,7 @@
-#include <Arduino.h>
-#include <Wire.h>
+#define UTILITY_MODULE
+#include "shared/module.h"
 
-#include "shared/address.h"
-#include "shared/message.h"
+const Address addr = address::DEADMAN;
 
 // outputs
 const uint8_t PIN_LED = 4;
@@ -22,68 +21,30 @@ uint32_t released;
 
 Status status;
 
-void reset()
+void initialise()
 {
-  status.state = ModuleState::READY;
-  status.strikes = 0;
-
-  // released is set when we transition from READY to ARMED
-}
-
-void receiveEvent(int count)
-{
-  if (count == 0)
-    return;
-
-  Message msg;
-  for (int i = 0; i < count; ++i)
-    reinterpret_cast<uint8_t*>(&msg)[i] = Wire.read();
-
-  switch (msg.opcode)
-  {
-    case OpCode::ARM:
-      status.state = ModuleState::ARMED;
-      released = millis() + COOLDOWN;
-    break;
-    case OpCode::DEFUSED:
-    case OpCode::EXPLODED:
-      status.state = ModuleState::STOP;
-    break;
-    case OpCode::RESET:
-      reset();
-    break;
-    default:
-    break;
-  }
-}
-
-void requestEvent()
-{
-  Wire.write(reinterpret_cast<uint8_t*>(&status), sizeof(status));
-  status.strikes = 0;
-}
-
-void setup()
-{
-  // setup pins
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_COOLDOWN, OUTPUT);
-  digitalWrite(PIN_LED, 0);
-
   pinMode(PIN_SWITCH, INPUT);
-
-  Wire.begin(address::DEADMAN);
-  Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);
-
-  reset();
 }
 
-void loop()
+void reset()
 {
-  if (status.state != ModuleState::ARMED)
-    return;
+  // setup pins
+  digitalWrite(PIN_LED, 0);
+}
 
+void onIndicators()
+{
+}
+
+void arm()
+{
+  released = millis() + COOLDOWN;
+}
+
+void idle()
+{
   if (digitalRead(PIN_SWITCH))
   {
     if (released)
@@ -102,7 +63,7 @@ void loop()
   {
     if (millis() > released + DETONATION_TIME)
     {
-      status.strikes = 1;
+      strike();
       released = millis() + COOLDOWN;
     }
     else
@@ -119,4 +80,12 @@ void loop()
       }
     }
   }
+}
+
+void defuse()
+{
+}
+
+void detonate()
+{
 }
