@@ -1,6 +1,3 @@
-#include <Arduino.h>
-#include <Wire.h>
-
 #include "shared/module.h"
 #include "shared/util.h"
 
