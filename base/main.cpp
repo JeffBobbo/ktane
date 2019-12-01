@@ -195,6 +195,7 @@ void reset()
 
   end = 0;
   now = 0;
+  start = 0;
   strikes = 0;
   lastStrike = 0;
   lastDisarm = 0;
