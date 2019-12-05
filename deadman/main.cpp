@@ -19,8 +19,6 @@ const uint32_t COOLDOWN = 15000;
 // time when button was last released (or 0 for held)
 uint32_t released;
 
-Status status;
-
 void initialise()
 {
   pinMode(PIN_LED, OUTPUT);
