@@ -43,6 +43,7 @@ uint32_t DISARM_BUZZ_TIME = 200;
 
 Address modules[address::NUM_MODULES];
 size_t moduleCount;
+size_t disarmed;
 char serial[SERIAL_LENGTH+1];
 
 uint8_t bindicator;
@@ -181,6 +182,8 @@ void indicate()
   indicators.numerical = nindicator;
   indicators.binary = bindicator;
   indicators.strikes = strikes;
+  indicators.modules = moduleCount;
+  indicators.disarmed = disarmed;
   strncpy(reinterpret_cast<char*>(indicators.serial), serial, SERIAL_LENGTH+1);
 
   memcpy(msg.data, &indicators, sizeof(indicators));
@@ -309,7 +312,6 @@ void loop()
       broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
     }
     size_t numDisarmed = 0;
-    static size_t lastNumDisarmed = 0;
     for (size_t i = 0; i < moduleCount; ++i)
     {
       Status status = report(modules[i]);
@@ -322,10 +324,10 @@ void loop()
       if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
         ++numDisarmed;
     }
-    if (lastNumDisarmed != numDisarmed && numDisarmed != 0)
+    if (disarmed != numDisarmed && numDisarmed != 0)
     {
       lastDisarm = now;
-      lastNumDisarmed = numDisarmed;
+      disarmed = numDisarmed;
     }
     if (numDisarmed == moduleCount)
     {

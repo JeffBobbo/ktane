@@ -44,6 +44,8 @@ struct Indicators
   uint8_t numerical;
   uint8_t binary;
   uint8_t strikes;
+  uint8_t modules;
+  uint8_t disarmed;
   char serial[SERIAL_LENGTH+1];
 };
 

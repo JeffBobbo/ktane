@@ -14,6 +14,7 @@ namespace address
   const Address DEADMAN = 11;
   const Address MINEFIELD = 12;
   const Address AUTHORIZATION = 13;
+  const Address TRAFFIC = 14;
 
   // extra peripherals
   const Address OLED_DISPLAY = 0x3C; // 60
@@ -25,12 +26,14 @@ namespace address
     SIMON,
     DEADMAN,
     MINEFIELD,
-    AUTHORIZATION
+    AUTHORIZATION,
+    TRAFFIC
   };
   const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
 
   const Address needy[] = {
-    DEADMAN
+    DEADMAN,
+    TRAFFIC
   };
 
   bool isNeedy(const Address module)
