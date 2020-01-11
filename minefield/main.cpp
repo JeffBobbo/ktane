@@ -1,4 +1,5 @@
 #include "shared/module.h"
+#include "shared/debounce.h"
 
 #include <LedControl.h>
 
@@ -21,6 +22,10 @@ uint8_t progress;
 
 Path path;
 
+Debounce north(PIN_NORTH);
+Debounce east(PIN_EAST);
+Debounce south(PIN_SOUTH);
+Debounce west(PIN_WEST);
 void initialise()
 {
   randomSeed(analogRead(PIN_SEED));
@@ -29,11 +34,6 @@ void initialise()
   display.setIntensity(0, 1);
   display.clearDisplay(0);
   display.shutdown(0, false);
-
-  pinMode(PIN_NORTH, INPUT);
-  pinMode(PIN_EAST, INPUT);
-  pinMode(PIN_SOUTH, INPUT);
-  pinMode(PIN_WEST, INPUT);
 }
 
 void reset()
@@ -68,27 +68,28 @@ void idle()
   uint8_t cell;
   bool pressed = false;
 
-  if (digitalRead(PIN_NORTH))
+  north.update();
+  east.update();
+  south.update();
+  west.update();
+
+  if (north.is_released())
   {
-    while (digitalRead(PIN_NORTH));
     cell = path.path[progress] + 8;
     pressed = true;
   }
-  else if (digitalRead(PIN_EAST))
+  else if (east.is_released())
   {
-    while (digitalRead(PIN_EAST));
     cell = path.path[progress] + 1;
     pressed = true;
   }
-  else if (digitalRead(PIN_SOUTH))
+  else if (south.is_released())
   {
-    while (digitalRead(PIN_SOUTH));
     cell = path.path[progress] - 8;
     pressed = true;
   }
-  else if (digitalRead(PIN_WEST))
+  else if (west.is_released())
   {
-    while (digitalRead(PIN_WEST));
     cell = path.path[progress] - 1;
     pressed = true;
   }
