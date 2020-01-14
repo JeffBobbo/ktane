@@ -14,8 +14,8 @@
 const uint8_t PIN_SEED = A0; // for seeding rng
 
 // digital pins
-const uint8_t PIN_CLK = 3;
-const uint8_t PIN_DIO = 2;
+const uint8_t PIN_CLK = 2;
+const uint8_t PIN_DIO = 3;
 
 const uint8_t PIN_START = 4;
 const uint8_t PIN_RESET = 5;
@@ -211,8 +211,8 @@ void reset()
   // generate random serial hash
   generate();
 
-  bindicator = random(15);
-  nindicator = random(9);
+  bindicator = random(16);
+  nindicator = random(100);
 
   // scan for modules on the bus
   // delay to ensure they're all powered up
