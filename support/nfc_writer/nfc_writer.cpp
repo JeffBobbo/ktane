@@ -19,7 +19,10 @@ MFRC522 mfrc522(PIN_SELECT, PIN_RESET);
 
 MFRC522::MIFARE_Key key;
 
-uint8_t dataBlock[16] = {0x00};
+uint8_t dataBlock[16] = {
+  0x28, 0x54, 0x8E, 0xD1, 0x39, 0x32, 0xCA, 0x58,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
 
 /**
  * Helper routine to dump a byte array as hex values to Serial.
@@ -32,6 +35,19 @@ void dump_byte_array(const uint8_t* const buffer, size_t len)
     Serial.print(buffer[i], HEX);
   }
 }
+
+
+void render()
+{
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.print("Tag #");
+  display.print(dataBlock[15]);
+
+  display.display();
+}
+
 
 /**
  * Initialize.
@@ -59,16 +75,6 @@ void setup()
   render();
 }
 
-void render()
-{
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setCursor(0, 0);
-  display.print("Tag #");
-  display.print(dataBlock[15]);
-
-  display.display();
-}
 
 /**
  * Main loop.

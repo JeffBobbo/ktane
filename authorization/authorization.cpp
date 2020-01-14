@@ -10,8 +10,10 @@ const uint8_t PIN_DISARM_LED = 3;
 
 const uint8_t PIN_ERROR_LED = 2;
 
-const uint8_t PIN_RESET = 9; // NFC tag reader reset pin
-const uint8_t PIN_SELECT = 10; // NFC slave select line
+const uint8_t PIN_RESET = 9;
+const uint8_t PIN_SELECT = 10;
+
+const uint8_t PSK[8] = {0x28, 0x54, 0x8E, 0xD1, 0x39, 0x32, 0xCA, 0x58};
 
 uint32_t lastError = 0;
 
@@ -43,7 +45,9 @@ void reset()
 
 void onIndicators()
 {
-  user = (indicators.numerical + indicators.binary + indicators.strikes + util::sum(indicators.serial)) % 24;
+  const uint8_t digit = indicators.numerical % 10;
+  const uint8_t tens = (indicators.numerical / 10) % 10;
+  user = indicators.strikes == 0 ? digit : tens;
 
   if (state == ModuleState::INITIALISATION)
     state = ModuleState::READY;
@@ -53,8 +57,6 @@ void arm()
 {
 }
 
-// not used, slightly concerned?
-//const uint8_t SECTOR = 1;
 const uint8_t BLOCK = 4;
 const uint8_t TRAILER = 7;
 
@@ -62,9 +64,8 @@ void error()
 {
   lastError = millis();
 
-  // Halt PICC
+  // stop any communication
   mfrc522.PICC_HaltA();
-  // Stop encryption on PCD
   mfrc522.PCD_StopCrypto1();
 }
 
@@ -80,42 +81,29 @@ void idle()
     digitalWrite(PIN_ERROR_LED, 0);
   }
 
-  // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
+  // if no tag present, return -- this prevents us from processing the same tag twice
   if (!mfrc522.PICC_IsNewCardPresent())
     return;
 
-  // Select one of the cards
+  // select the presented tag
   if (!mfrc522.PICC_ReadCardSerial())
     return;
 
-  MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
-
-  // Check for compatibility
-  if (/*piccType != MFRC522::PICC_TYPE_MIFARE_MINI
-    && */piccType != MFRC522::PICC_TYPE_MIFARE_1K
-    //&& piccType != MFRC522::PICC_TYPE_MIFARE_4K
-  )
+  // check the type, we only support MiFare 1k
+  if (mfrc522.PICC_GetType(mfrc522.uid.sak) != MFRC522::PICC_TYPE_MIFARE_1K)
   {
     error();
     return;
   }
 
-  MFRC522::StatusCode status;
-  uint8_t buffer[18];
-  uint8_t size = sizeof(buffer);
 
-  // In this sample we use the second sector,
-  // that is: sector #1, covering block #4 up to and including block #7
-
-  // Authenticate using key A
-  status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, TRAILER, &key, &(mfrc522.uid));
+  // authenticate
+  MFRC522::StatusCode status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, TRAILER, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK)
   {
     error();
     return;
   }
-
-  // Authenticate using key B
   status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_B, TRAILER, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK)
   {
@@ -123,7 +111,10 @@ void idle()
     return;
   }
 
-  // Read data from the block (again, should now be what we have written)
+  // setup a buffer to store retrieved data in
+  uint8_t buffer[18];
+  uint8_t size = sizeof(buffer);
+
   status = mfrc522.MIFARE_Read(BLOCK, buffer, &size);
   if (status != MFRC522::STATUS_OK)
   {
@@ -131,15 +122,24 @@ void idle()
     return;
   }
 
+  // check that the tag contains our pre-shared key
+  for (uint8_t i = 0; i < 8; ++i)
+  {
+    if (PSK[i] != buffer[i])
+    {
+      error();
+      return;
+    }
+  }
+
+  // test
   if (buffer[15] == user)
     disarm();
   else
     strike();
 
-
-  // Halt PICC
+  // stop communication
   mfrc522.PICC_HaltA();
-  // Stop encryption on PCD
   mfrc522.PCD_StopCrypto1();
 }
 
