@@ -7,7 +7,7 @@
 const Address addr = address::SAFE;
 const uint8_t PIN_DISARM_LED = 8;
 
-const uint8_t NUM_STEPS = 20;
+const int16_t NUM_STEPS = 100;
 
 // encoder
 const uint8_t PIN_CLK = 2;
@@ -41,7 +41,7 @@ void segment(const uint8_t v)
 }
 
 const uint8_t CODE_LENGTH = 3;
-int8_t code[CODE_LENGTH] = {0};
+int16_t code[CODE_LENGTH] = {0};
 
 bool calibrated;
 
@@ -72,13 +72,50 @@ void reset()
 
 void onIndicators()
 {
-  if (state == ModuleState::INITIALISATION)
+  const uint8_t digits = indicators.numerical % 10;
+  const uint8_t tens = (indicators.numerical / 10) % 10;
+  const uint8_t a = (NUM_STEPS - 1) - indicators.numerical;
+  const uint8_t b = indicators.numerical;
+  const uint8_t c = digits * 10 + tens;
+
+
+  // abc, bac, acb, bca, cba, cab
+  switch (indicators.strikes)
   {
-    code[0] = (util::countEvens(indicators.serial) + util::countOdds(indicators.serial)) % NUM_STEPS;
-    code[1] = (code[0] - (util::hasEvens(indicators.serial) ? 10 : 5) + NUM_STEPS) % NUM_STEPS;
-    code[2] = (code[1] + (util::hasVowels(indicators.serial) ? 7 : 13) + NUM_STEPS) % NUM_STEPS;
-    state = ModuleState::READY;
+    case 0:
+      code[0] = a;
+      code[1] = b;
+      code[2] = c;
+      break;
+    case 1:
+      code[0] = b;
+      code[1] = a;
+      code[2] = c;
+      break;
+    case 2:
+      code[0] = a;
+      code[1] = c;
+      code[2] = b;
+      break;
+    case 3:
+      code[0] = b;
+      code[1] = c;
+      code[2] = c;
+      break;
+    case 4:
+      code[0] = c;
+      code[1] = b;
+      code[2] = a;
+      break;
+    default:
+      code[0] = c;
+      code[1] = a;
+      code[2] = b;
+      break;
   }
+
+  if (state == ModuleState::INITIALISATION)
+    state = ModuleState::READY;
 }
 
 void arm()
@@ -89,7 +126,7 @@ void idle()
 {
   button.update();
 
-  const int8_t value = (encoder.read() + NUM_STEPS * 4) % (NUM_STEPS * 4);
+  const int16_t value = (encoder.read() + NUM_STEPS * 4) % (NUM_STEPS * 4);
   encoder.write(value);
   segment(value / 4);
 
