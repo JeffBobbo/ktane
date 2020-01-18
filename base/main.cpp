@@ -83,7 +83,7 @@ void display_state()
 
 void display_timeRemaining()
 {
-  const uint32_t remaining = (start + TIME_ALLOWED) - (end ? end : now);
+  const int32_t remaining = max((start + TIME_ALLOWED) - (end ? end : now), 0);
 
   uint32_t m = (remaining / 1000) / 60;
   uint32_t s = (remaining / 1000) % 60;
@@ -141,9 +141,8 @@ void screen()
   int16_t x1, y1;
   uint16_t x2, y2;
 
-  if (state != BaseState::READY)
+  if (state != BaseState::INITIALISATION && state != BaseState::READY)
   {
-    display.setTextSize(2);
     display.getTextBounds(serial, 0, 0, &x1, &y1, &x2, &y2);
     display.setCursor((128 - x2) / 2, (32 - y2) / 2);
     display.print(serial);
@@ -207,7 +206,6 @@ void reset()
   moduleCount = 0;
   memset(serial, 0, SERIAL_LENGTH+1);
 
-  state = BaseState::INITIALISATION;
   // generate random serial hash
   generate();
 
@@ -221,6 +219,8 @@ void reset()
 
   // write to the screen once, since loop will block writes until all modules are ready
   screen();
+
+  state = BaseState::INITIALISATION;
 
   // transmit info to all
   indicate();
@@ -255,6 +255,7 @@ void setup()
   display.clearDisplay();
   display.setTextColor(WHITE);
   display.setTextWrap(false);
+  display.setTextSize(2);
   display.dim(1);
 
   reset();
