@@ -1,5 +1,6 @@
 #include "shared/module.h"
 #include "shared/util.h"
+#include "shared/debounce.h"
 
 const Address addr = address::SIMON;
 const uint8_t PIN_DISARM_LED = 10;
@@ -19,7 +20,7 @@ const uint8_t PIN_R = 9;
 const uint8_t PIN_G = 8;
 const uint8_t PIN_Y = 7;
 const uint8_t PIN_B = 6;
-const uint8_t PINS[] = {PIN_R, PIN_G, PIN_Y, PIN_B};
+const Debounce PINS[] = {Debounce(PIN_R), Debounce(PIN_G), Debounce(PIN_Y), Debounce(PIN_B)};
 
 const uint8_t PIN_SEED = 0;
 
@@ -64,6 +65,7 @@ void initialise()
 
   // seed
   randomSeed(analogRead(PIN_SEED));
+  reset();
 }
 
 void reset()
@@ -104,13 +106,12 @@ void idle()
   if (showing)
   {
     const uint32_t period = (progress+1) * (FLASH_TIME + PAUSE_TIME) + REPEAT_TIME;
-
     const uint32_t now = (millis() - start) % period;
     if (now < period - REPEAT_TIME)
     {
       const uint32_t led = now / (FLASH_TIME + PAUSE_TIME);
 
-      if (now % (FLASH_TIME + PAUSE_TIME) < FLASH_TIME)
+      if (start < millis() && now % (FLASH_TIME + PAUSE_TIME) < FLASH_TIME)
       {
         digitalWrite(LEDS[code[led]], 1);
         tone(PIN_BUZZER, TONES[code[led]]);
@@ -121,40 +122,52 @@ void idle()
       }
     }
   }
+  else if (start + 500 < millis())
+  {
+    stop();
+    start = millis() + 1000;
+    if (current == 0)
+      showing = true;
+  }
+
+  for (uint8_t i = 0; i < 4; ++i)
+    PINS[i].update();
 
   for (uint8_t i = 0; i < 4; ++i)
   {
-    if (digitalRead(PINS[i]))
+    if (PINS[i].is_released())
     {
-      while (digitalRead(PINS[i]));
       showing = false;
+      stop();
       if (code[current] != mapCode(i))
       {
         strike();
-        start = millis();
+        start = millis() + 1000;
         current = 0;
+        showing = true;
       }
       else
       {
+        const auto prev = current;
+        start = millis();
         if (current == progress)
         {
           current = 0;
           ++progress;
-          start = millis();
-          showing = true;
+          if (progress == MAX_CODE_LENGTH)
+          {
+            disarm();
+            return;
+          }
         }
         else
         {
           ++current;
         }
+        digitalWrite(LEDS[i], 1);
+        tone(PIN_BUZZER, TONES[i]);
       }
     }
-  }
-  if (progress == MAX_CODE_LENGTH)
-  {
-    disarm();
-    for (uint8_t i = 0; i < 4; ++i)
-      digitalWrite(LEDS[i], 0);
   }
 }
 
