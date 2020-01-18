@@ -18,7 +18,7 @@ const uint8_t PIN_SEED = A0;
 
 LedControl display = LedControl(12, 11, 10, 1);
 
-uint8_t progress;
+size_t progress;
 
 Path path;
 
@@ -26,6 +26,7 @@ Debounce north(PIN_NORTH);
 Debounce east(PIN_EAST);
 Debounce south(PIN_SOUTH);
 Debounce west(PIN_WEST);
+
 void initialise()
 {
   randomSeed(analogRead(PIN_SEED));
@@ -34,6 +35,8 @@ void initialise()
   display.setIntensity(0, 1);
   display.clearDisplay(0);
   display.shutdown(0, false);
+
+  reset();
 }
 
 void reset()
@@ -42,6 +45,7 @@ void reset()
 
   progress = 0;
   path = paths[random(NUM_PATHS)];
+  state = ModuleState::READY;
 }
 
 void onIndicators()
@@ -58,14 +62,14 @@ void displayCell() {
 
 void displayMaze() {
   display.clearDisplay(0);
-  for (uint8_t i = 0; i <= progress; ++i)
+  for (size_t i = 0; i <= progress; ++i)
     display.setLed(0, path.path[i] / 8, path.path[i] % 8, true);
 }
 
-uint8_t lastProgress = 255;
+size_t lastProgress = 255;
 void idle()
 {
-  uint8_t cell;
+  size_t cell;
   bool pressed = false;
 
   north.update();
