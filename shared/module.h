@@ -91,8 +91,6 @@ void requestEvent()
 
 void setup()
 {
-  Serial.begin(9600);
-
   // setup comms
   Wire.begin(addr);
   Wire.onReceive(receiveEvent);
