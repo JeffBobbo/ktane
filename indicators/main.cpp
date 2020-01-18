@@ -43,8 +43,8 @@ const uint8_t SEG_TABLE[] = {
 void segment(const uint8_t v)
 {
   digitalWrite(PIN_LATCH, 0);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[v % 10]);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[(v / 10) % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[v % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[(v / 10) % 10]);
   digitalWrite(PIN_LATCH, 1);
 }
 
@@ -102,11 +102,13 @@ void reset()
 
 void onIndicators()
 {
-  display(indicators);
+  if (state == ModuleState::ARMED)
+    display(indicators);
 }
 
 void arm()
 {
+  display(indicators);
 }
 
 void idle()
