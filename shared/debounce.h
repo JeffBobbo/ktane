@@ -11,6 +11,11 @@ public:
     pinMode(pin, INPUT);
   }
 
+  void init()
+  {
+    pinMode(pin, INPUT);
+  }
+
   inline uint8_t getPin() const { return pin; }
 
   void update() {
