@@ -35,8 +35,8 @@ const uint8_t SEG_TABLE[] = {
 void segment(const uint8_t v)
 {
   digitalWrite(PIN_LATCH, 0);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[v % 10]);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[(v / 10) % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[v % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[(v / 10) % 10]);
   digitalWrite(PIN_LATCH, 1);
 }
 
@@ -62,11 +62,11 @@ void initialise()
   digitalWrite(button.getPin(), 1); // turn on internal pullup
 
   reset();
-  Serial.begin(9600);
 }
 
 void reset()
 {
+  segment(255);
   index = 0;
 }
 
