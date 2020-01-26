@@ -4,14 +4,17 @@
 
 const Address addr = address::FIZZBUZZ;
 
-const uint8_t PIN_NEITHER = 7;
-const uint8_t PIN_FIZZ = 6;
-const uint8_t PIN_BUZZ = 5;
-const uint8_t PIN_FIZZBUZZ = 4;
+const uint8_t PIN_NEITHER = 5;
+const uint8_t PIN_FIZZ = 4;
+const uint8_t PIN_BUZZ = 3;
+const uint8_t PIN_FIZZBUZZ = 2;
 
-const uint8_t PIN_DATA = 8;
-const uint8_t PIN_CLOCK = 9;
-const uint8_t PIN_LATCH = 10;
+const uint8_t PIN_DATA = 6;
+const uint8_t PIN_CLOCK = 7;
+const uint8_t PIN_LATCH = 8;
+
+const uint8_t PIN_GREEN = 10;
+const uint8_t PIN_RED = 11;
 
 const uint8_t PIN_RANDOM_SEED = A0;
 
@@ -31,8 +34,8 @@ const uint8_t SEG_TABLE[] = {
 void segment(const uint8_t v)
 {
   digitalWrite(PIN_LATCH, 0);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[v % 10]);
-  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 0 : SEG_TABLE[(v / 10) % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[v % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[(v / 10) % 10]);
   digitalWrite(PIN_LATCH, 1);
 }
 
@@ -44,7 +47,7 @@ Debounce fizzbuzz(PIN_FIZZBUZZ);
 uint8_t number;
 int32_t start = 0;
 
-const int32_t TIME_ALLOWED = 10000;
+const int32_t TIME_ALLOWED = 30000;
 
 enum class Choice {
   NONE,
@@ -73,6 +76,10 @@ void initialise()
 
 void reset()
 {
+  analogWrite(PIN_RED, 0);
+  analogWrite(PIN_GREEN, 0);
+  segment(255);
+
   state = ModuleState::READY;
 }
 
@@ -83,9 +90,26 @@ void onIndicators()
 void arm()
 {
   segment(255);
-  number = random(1, 100);
+  switch (random(0, 3))
+  {
+    case 0:
+      number = random(1, 100); // 1 .. 99
+      break;
+    case 1:
+      number = random(1, 33) * 3; // 3 .. 99
+      break;
+    case 2:
+      number = random(1, 20) * 5; // 5 .. 95
+      break;
+    case 3:
+      number = random(1, 7) * 15; // 15 .. 90
+      break;
+  }
   choice = Choice::NONE;
-  start = 5*1000;//random(30, 60) * 1000;
+  start = millis() + random(30, 60) * 1000;
+
+  digitalWrite(PIN_RED, 0);
+  digitalWrite(PIN_GREEN, 1);
 }
 
 bool test()
@@ -126,17 +150,25 @@ void idle()
   else if (fizzbuzz.is_released())
     choice = Choice::FIZZBUZZ;
 
-  if (now > start + TIME_ALLOWED)
+  if (now > start)
   {
+    digitalWrite(PIN_GREEN, 0);
     segment(number);
+    const int32_t remain = start + TIME_ALLOWED - now;
+    digitalWrite(PIN_RED, static_cast<int32_t>(remain / sqrt(remain) * 0.5f) % 2);
+
     if (choice != Choice::NONE)
     {
       if (!test())
         strike();
       arm();
     }
+    if (now > start + TIME_ALLOWED)
+    {
+      strike();
+      arm();
+    }
   }
-
 }
 
 void defuse()
