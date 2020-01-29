@@ -16,10 +16,12 @@ namespace address
   const Address AUTHORIZATION = 13;
   const Address TRAFFIC = 14;
   const Address FIZZBUZZ = 15;
+  const Address MARITIME = 16;
 
   // extra peripherals
   const Address OLED_DISPLAY = 0x3C; // 60
   const Address INDICATORS = 61;
+  const Address MARITIME_ALPHA = 0x70;
 
   // a list of modules we should broadcast to
   const Address modules[] = {
@@ -29,7 +31,8 @@ namespace address
     MINEFIELD,
     AUTHORIZATION,
     TRAFFIC,
-    FIZZBUZZ
+    FIZZBUZZ,
+    MARITIME
   };
   const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
 
