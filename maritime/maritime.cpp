@@ -30,6 +30,7 @@ Debounce down(PIN_DOWN);
 Debounce up(PIN_UP);
 Debounce next(PIN_NEXT);
 
+const uint8_t ALPHA_ADDRESS = 0x70;
 AlphaNum4 alpha4 = AlphaNum4(PIN_SOFT_SDA, PIN_SOFT_SCL);
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST);
 
@@ -47,7 +48,7 @@ void initialise()
   next.init();
 
   // start the i2c display
-  alpha4.begin(address::MARITIME_ALPHA);
+  alpha4.begin(ALPHA_ADDRESS);
   alpha4.clear();
   alpha4.writeDisplay();
 
@@ -66,7 +67,7 @@ void reset()
 
   progress = 0;
   current = 0;
- 
+
   // randomize the code
   for (size_t i = 0; i < 4; ++i)
     code[i] = valid[random(0, sizeof(valid))];
