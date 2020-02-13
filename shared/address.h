@@ -17,6 +17,7 @@ namespace address
   const Address TRAFFIC = 14;
   const Address FIZZBUZZ = 15;
   const Address MARITIME = 16;
+  const Address ASCII = 17;
 
   // extra peripherals
   const Address OLED_DISPLAY = 0x3C; // 60
@@ -31,7 +32,8 @@ namespace address
     AUTHORIZATION,
     TRAFFIC,
     FIZZBUZZ,
-    MARITIME
+    MARITIME,
+    ASCII
   };
   const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
 
