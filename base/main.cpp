@@ -104,6 +104,10 @@ size_t broadcast(const uint8_t* const data, const size_t len)
   Wire.write(data, len);
   Wire.endTransmission();
 
+  Wire.beginTransmission(address::LID),
+  Wire.write(data, len);
+  Wire.endTransmission();
+
   return len;
 }
 
