@@ -22,9 +22,8 @@ const uint8_t PIN_RESET = 5;
 
 TM1637Display countdown(PIN_CLK, PIN_DIO);
 
- const uint8_t PIN_BUZZER_STRIKE = 11;
- const uint8_t PIN_BUZZER_DISARM = 13;
- const uint8_t PIN_RELAY = 6;
+const uint8_t PIN_BUZZER_STRIKE = 11;
+const uint8_t PIN_BUZZER_DISARM = 13;
 
 // game state, and strikes
 BaseState state;
@@ -236,7 +235,6 @@ void setup()
 
   pinMode(PIN_BUZZER_STRIKE, OUTPUT);
   pinMode(PIN_BUZZER_DISARM, OUTPUT);
-  pinMode(PIN_RELAY, OUTPUT);
   pinMode(PIN_START, INPUT);
   pinMode(PIN_RESET, INPUT);
 
