@@ -21,7 +21,8 @@ enum class BaseState : uint8_t
   READY,
   ARMED, // gameplay is running
   DEFUSED, // win state
-  EXPLODED // lose state
+  EXPLODED, // lose state
+  CONFIGURE // configuration module in, special case
 };
 
 enum class ModuleState : uint8_t
@@ -47,6 +48,13 @@ struct Indicators
   uint8_t modules;
   uint8_t disarmed;
   char serial[SERIAL_LENGTH+1];
+};
+
+struct Configuration
+{
+  bool relay;
+  uint8_t max_strikes;
+  millis_t time_allowed;
 };
 
 #endif
