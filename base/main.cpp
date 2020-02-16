@@ -10,6 +10,8 @@
 #include "shared/config.h"
 #include "shared/message.h"
 
+#include "settings.h"
+
 // analog pins
 const uint8_t PIN_SEED = A0; // for seeding rng
 
@@ -28,10 +30,8 @@ const uint8_t PIN_BUZZER_DISARM = 13;
 // game state, and strikes
 BaseState state;
 uint8_t strikes;
-uint8_t MAX_STRIKES = 3;
 
 // timing
-const uint32_t TIME_ALLOWED = 3UL * 60UL * 1000UL;
 uint32_t start;
 uint32_t end;
 uint32_t now;
@@ -73,6 +73,9 @@ void display_state()
     case BaseState::EXPLODED:
       str = "EXPLODED";
     break;
+    case BaseState::CONFIGURE:
+      str = "CONFIGURE";
+    break;
   }
 
   display.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
@@ -82,7 +85,7 @@ void display_state()
 
 void display_timeRemaining()
 {
-  const int32_t remaining = max((start + TIME_ALLOWED) - (end ? end : now), 0);
+  const int32_t remaining = max((start + settings::time_allowed) - (end ? end : now), 0);
 
   uint32_t m = (remaining / 1000) / 60;
   uint32_t s = (remaining / 1000) % 60;
@@ -116,12 +119,17 @@ size_t broadcast(T& t)
   return broadcast(reinterpret_cast<uint8_t*>(&t), sizeof(t));
 }
 
+bool detect(const uint8_t address)
+{
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
 void scan()
 {
   for (size_t i = 0; i < address::NUM_MODULES; ++i)
   {
-    Wire.beginTransmission(address::modules[i]);
-    if (Wire.endTransmission() == 0)
+    if (detect(address::modules[i]))
       modules[moduleCount++] = address::modules[i];
   }
 }
@@ -207,8 +215,6 @@ void reset()
 
   memset(modules, 0, address::NUM_MODULES);
   moduleCount = 0;
-  memset(serial, 0, SERIAL_LENGTH+1);
-
   // generate random serial hash
   generate();
 
@@ -218,15 +224,34 @@ void reset()
   // scan for modules on the bus
   // delay to ensure they're all powered up
   delay(250);
-  scan();
 
-  // write to the screen once, since loop will block writes until all modules are ready
-  screen();
+  if (detect(address::CONFIG))
+  {
+    state = BaseState::CONFIGURE;
+  }
+  else
+  {
+    scan();
 
-  state = BaseState::INITIALISATION;
+    // write to the screen once, since loop will block writes until all modules are ready
+    screen();
 
-  // transmit info to all
-  indicate();
+    state = BaseState::INITIALISATION;
+
+    // transmit info to all
+    indicate();
+
+    Configure conf = {
+      settings::relay,
+      settings::max_strikes,
+      settings::time_allowed
+    };
+    
+    // send to modules
+    Message msg(OpCode::CONFIGURE);
+    memcpy(msg.data, &conf, sizeof(conf));
+    broadcast(msg);
+  }
 }
 
 void setup()
@@ -305,7 +330,7 @@ void loop()
     digitalWrite(PIN_BUZZER_STRIKE, lastStrike + STRIKE_BUZZ_TIME > millis());
     digitalWrite(PIN_BUZZER_DISARM, lastDisarm + DISARM_BUZZ_TIME > millis());
 
-    if (start + TIME_ALLOWED < now || strikes >= MAX_STRIKES)
+    if ((start + settings::time_allowed) < now || strikes >= settings::max_strikes)
     {
       state = BaseState::EXPLODED;
       end = now;
@@ -344,7 +369,7 @@ void loop()
     }
   }
 
-  if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED)
+  if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED || state == BaseState::CONFIGURE)
   {
     if (digitalRead(PIN_RESET))
     {

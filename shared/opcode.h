@@ -10,7 +10,8 @@ enum class OpCode : uint8_t
   DEFUSED, // instructs a module to stop because it's been defused
   EXPLODED, // instructs a module to stop because it's exploded
   RESET, // modules should reset
-  INDICATORS // xfer of indicators
+  INDICATORS, // xfer of indicators
+  CONFIGURATION
 };
 
 String toString(const OpCode op)
