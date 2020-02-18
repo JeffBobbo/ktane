@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-#include "opcode.h"
 #include "config.h"
+#include "opcode.h"
+#include "typedefs.h"
 
 struct Message
 {
@@ -22,7 +23,7 @@ enum class BaseState : uint8_t
   ARMED, // gameplay is running
   DEFUSED, // win state
   EXPLODED, // lose state
-  CONFIGURE // configuration module in, special case
+  // CONFIGURE // configuration module in, special case
 };
 
 enum class ModuleState : uint8_t

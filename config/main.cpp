@@ -1,6 +1,6 @@
-#define UTILITY_MODULE
-#include "shared/module.h"
-
+// #define UTILITY_MODULE
+// #include "shared/module.h"
+#include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -11,12 +11,27 @@ const uint8_t PIN_UP = 4;
 const uint8_t PIN_DOWN = 5;
 const uint8_t PIN_LEFT = 6;
 const uint8_t PIN_RIGHT = 7;
+
+
 Debounce up(PIN_UP);
 Debounce down(PIN_DOWN);
 Debounce left(PIN_LEFT);
 Debounce right(PIN_RIGHT);
 
-Adafruit_SSD1306 display(128, 64);
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// Declaration for SSD1306 display connected using software SPI (default case):
+#define OLED_MOSI   9
+#define OLED_CLK   10
+#define OLED_DC    11
+#define OLED_CS    12
+#define OLED_RESET 13
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT,
+  OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+
 
 struct Option {
   String name;
@@ -43,7 +58,7 @@ Option opt_volume = {
   4
 };
 Option opt_relay = {
-  String("Clock Ticker"),
+  String("Clock Tick"),
   1,
   0,
   1
@@ -68,39 +83,51 @@ Menu menu = {
 const int32_t NUM_OPTIONS = sizeof(menu.options) / sizeof(Option);
 
 
+void setup()
+{
+  Serial.begin(9600);
+
+  down.init();
+  up.init();
+  left.init();
+  right.init();
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC))
+  {
+    Serial.println(F("SSD1306 allocation failed"));
+    while (true);
+  }
+
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextWrap(false);
+  display.dim(1);
+  display.display();
+}
+
 void render()
 {
   display.clearDisplay();
 
   int16_t x, y;
   uint16_t w, h;
-  Option* option = menu.index >= 0 ? &(menu.options[menu.index]) : nullptr;
 
+  const Option* const option = &(menu.options[menu.index]);
   if (menu.active)
   {
-    if (option)
-    {
-      display.setTextSize(2);
-      display.getTextBounds(option->name.c_str(), 0, 0, &x, &y, &w, &h);
-      display.setCursor((128 - w) / 2, 0);
-      display.print(option->name.c_str());
+    display.setTextSize(2);
+    display.getTextBounds(option->name.c_str(), 0, 0, &x, &y, &w, &h);
+    display.setCursor((128 - w) / 2, 0);
+    display.print(option->name.c_str());
 
-      char value[4];
-      itoa(option->value, value, 10);
-      char max[4];
-      itoa(option->max, max, 10);
-
-      display.setCursor(0, 40);
-      display.print(option->min);
-      
-      display.getTextBounds(max, 0, 0, &x, &y, &w, &h);
-      display.setCursor(128 - w, 40);
-      display.print(max);
-
-      display.getTextBounds(value, 0, 0, &x, &y, &w, &h);
-      display.setCursor((128 - w) / 2, 40);
-      display.print(value);
-    }
+    display.setCursor(0, 40);
+    // display.print(option->min);
+    display.print("<=");
+    // display.print(option->value);
+    display.print("<=");
+    display.print(option->max);
+    display.setCursor(0, 48);
+    display.print("TEST");
   }
   else
   {
@@ -117,34 +144,6 @@ void render()
     }
   }
 
-  display.display();
-}
-
-void setup()
-{
-  Serial.begin(9600);
-  Wire.begin();
-
-  down.init();
-  up.init();
-  left.init();
-  right.init();
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
-  {
-    while (true)
-    {
-      digitalWrite(LED_BUILTIN, 1);
-      delay(250);
-      digitalWrite(LED_BUILTIN, 0);
-      delay(250);
-    }
-  }
-
-  display.clearDisplay();
-  display.setTextColor(WHITE);
-  display.setTextWrap(false);
-  display.dim(1);
   display.display();
 }
 

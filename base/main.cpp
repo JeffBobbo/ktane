@@ -241,16 +241,7 @@ void reset()
     // transmit info to all
     indicate();
 
-    Configure conf = {
-      settings::relay,
-      settings::max_strikes,
-      settings::time_allowed
-    };
-    
-    // send to modules
-    Message msg(OpCode::CONFIGURE);
-    memcpy(msg.data, &conf, sizeof(conf));
-    broadcast(msg);
+    // TODO: Send configuration to all modules
   }
 }
 

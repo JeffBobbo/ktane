@@ -53,10 +53,12 @@ void receiveEvent(int count)
 
   switch (msg.opcode)
   {
+    /*
     case OpCode::CONFIGURE:
       memcpy(&configuration, msg.data, sizeof(configuration));
       configure();
     break;
+    */
     case OpCode::ARM:
       state = ModuleState::ARMED;
       #ifndef UTILITY_MODULE
