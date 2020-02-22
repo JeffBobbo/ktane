@@ -73,9 +73,6 @@ void display_state()
     case BaseState::EXPLODED:
       str = "EXPLODED";
     break;
-    case BaseState::CONFIGURE:
-      str = "CONFIGURE";
-    break;
   }
 
   display.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
@@ -225,25 +222,19 @@ void reset()
   // delay to ensure they're all powered up
   delay(250);
 
-  if (detect(address::CONFIG))
-  {
-    state = BaseState::CONFIGURE;
-  }
-  else
-  {
-    scan();
+  scan();
 
-    // write to the screen once, since loop will block writes until all modules are ready
-    screen();
+  // write to the screen once, since loop will block writes until all modules are ready
+  screen();
 
-    state = BaseState::INITIALISATION;
+  state = BaseState::INITIALISATION;
 
-    // transmit info to all
-    indicate();
+  // transmit info to all
+  indicate();
 
-    // TODO: Send configuration to all modules
-  }
+  // TODO: Send configuration to all modules
 }
+
 
 void setup()
 {
@@ -360,7 +351,7 @@ void loop()
     }
   }
 
-  if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED || state == BaseState::CONFIGURE)
+  if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED)
   {
     if (digitalRead(PIN_RESET))
     {
