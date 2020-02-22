@@ -11,14 +11,10 @@ const uint8_t PIN_DATA  = 5;
 const uint8_t PIN_CLOCK = 6;
 const uint8_t PIN_LATCH = 7;
 
-const uint8_t PIN_DEFUSED = 8;
-
 const uint8_t PIN_BINARY_0 = 9;
 const uint8_t PIN_BINARY_1 = 10;
 const uint8_t PIN_BINARY_2 = 11;
 const uint8_t PIN_BINARY_3 = 12;
-
-const uint8_t PIN_EXPLODED = 13;
 
 //const uint8_t SEG_TABLE[] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71};
 const uint8_t SEG_TABLE[] = {
@@ -77,9 +73,6 @@ void initialise()
   pinMode(PIN_BINARY_2, OUTPUT);
   pinMode(PIN_BINARY_3, OUTPUT);
 
-  pinMode(PIN_DEFUSED, OUTPUT);
-  pinMode(PIN_EXPLODED, OUTPUT);
-
   reset();
 }
 
@@ -95,9 +88,6 @@ void reset()
   digitalWrite(PIN_BINARY_3, 0);
 
   segment(255);
-
-  digitalWrite(PIN_DEFUSED, 0);
-  digitalWrite(PIN_EXPLODED, 0);
 }
 
 void onIndicators()
@@ -117,10 +107,8 @@ void idle()
 
 void defuse()
 {
-  digitalWrite(PIN_DEFUSED, 1);
 }
 
 void detonate()
 {
-  digitalWrite(PIN_EXPLODED, 1);
 }
