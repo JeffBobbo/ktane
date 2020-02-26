@@ -25,8 +25,9 @@ uint8_t user;
 
 void initialise()
 {
-  pinMode(PIN_ERROR_LED, OUTPUT);
+  Serial.begin(9600);
 
+  pinMode(PIN_ERROR_LED, OUTPUT);
 
   SPI.begin();
   mfrc522.PCD_Init();
@@ -34,11 +35,12 @@ void initialise()
   // Prepare the default key, both A and B
   for (size_t i = 0; i < 6; ++i)
     key.keyByte[i] = 0xFF;
-
+  reset();
 }
 
 void reset()
 {
+  Serial.print("reset");
   digitalWrite(PIN_ERROR_LED, 0);
 }
 
