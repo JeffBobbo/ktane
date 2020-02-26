@@ -282,9 +282,6 @@ void indicate()
 
 void reset()
 {
-  Message rmsg(OpCode::RESET);
-  broadcast(rmsg);
-
   end = 0;
   now = 0;
   start = 0;
@@ -306,11 +303,14 @@ void reset()
 
   scan();
 
-  displayCountdown();
-  // write to the screen once, since loop will block writes until all modules are ready
-  render();
+  Message rmsg(OpCode::RESET);
+  broadcast(rmsg);
 
   state = BaseState::INITIALISATION;
+  // write to the screen once, since loop will block writes until all modules are ready
+
+  displayCountdown();
+  render();
 
   // transmit info to all
   indicate();
