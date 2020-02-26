@@ -11,7 +11,7 @@ const uint8_t PIN_COOLDOWN = 5;
 const uint8_t PIN_SWITCH = 2;
 
 // how long allowed to not die
-const uint32_t DETONATION_TIME = 5000;
+const uint32_t DETONATION_TIME = 15000;
 
 // cooldown between strikes
 const uint32_t COOLDOWN = 15000;
