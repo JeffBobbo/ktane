@@ -75,6 +75,9 @@ void receiveEvent(int count)
       detonate();
     break;
     case OpCode::RESET:
+      #ifndef UTILITY_MODULE
+      digitalWrite(PIN_DISARM_LED, 0);
+      #endif
       state = ModuleState::INITIALISATION;
       strikes = 0;
       reset();
