@@ -1,19 +1,26 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <SD.h>
+#include <SPI.h>
 
 #include <TM1637Display.h>
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <XTronical_ST7735.h>
 
 #include "shared/address.h"
 #include "shared/config.h"
 #include "shared/message.h"
 
+#include "ds3231.h"
+
 #include "settings.h"
 
 // analog pins
 const uint8_t PIN_SEED = A0; // for seeding rng
+
+const uint8_t PIN_CONFIG = A2;
+const uint8_t PIN_BACK = A3;
 
 // digital pins
 const uint8_t PIN_CLK = 2;
@@ -22,10 +29,25 @@ const uint8_t PIN_DIO = 3;
 const uint8_t PIN_START = 4;
 const uint8_t PIN_RESET = 5;
 
-TM1637Display countdown(PIN_CLK, PIN_DIO);
+const uint8_t PIN_SD_CS = 8;
 
-const uint8_t PIN_BUZZER_STRIKE = 11;
-const uint8_t PIN_BUZZER_DISARM = 13;
+const uint8_t PIN_BUZZER_DISARM = 6;
+const uint8_t PIN_BUZZER_STRIKE = 7;
+
+const int8_t TFT_CS = 10;
+const int8_t TFT_RST = -1;
+const int8_t TFT_DC = 9;
+
+// colour stuff for the TFT
+constexpr uint16_t colour(const float r, const float g, const float b);
+constexpr uint16_t COLOUR_BLACK   = 0x0000;
+constexpr uint16_t COLOUR_BLUE    = 0x001F;
+constexpr uint16_t COLOUR_RED     = 0xF800;
+constexpr uint16_t COLOUR_GREEN   = 0x07E0;
+constexpr uint16_t COLOUR_CYAN    = 0x07FF;
+constexpr uint16_t COLOUR_MAGENTA = 0xF81F;
+constexpr uint16_t COLOUR_YELLOW  = 0xFFE0;
+constexpr uint16_t COLOUR_WHITE   = 0xFFFF;
 
 // game state, and strikes
 BaseState state;
@@ -48,47 +70,9 @@ char serial[SERIAL_LENGTH+1];
 uint8_t bindicator;
 uint8_t nindicator;
 
-Adafruit_SSD1306 display(128, 32);
-
-void display_state()
-{
-  int16_t x1, y1;
-  uint16_t x2, y2;
-
-  const char* str = "ERROR";
-  switch (::state)
-  {
-    case BaseState::INITIALISATION:
-      str = "INIT";
-    break;
-    case BaseState::READY:
-      str = "READY";
-    break;
-    case BaseState::ARMED:
-      str = "ARMED";
-    break;
-    case BaseState::DEFUSED:
-      str = "DEFUSED";
-    break;
-    case BaseState::EXPLODED:
-      str = "EXPLODED";
-    break;
-  }
-
-  display.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-  display.setCursor((128 - x2) / 2, (32 -y2) / 2);
-  display.print(str);
-}
-
-void display_timeRemaining()
-{
-  const int32_t remaining = max((start + settings::time_allowed) - (end ? end : now), 0);
-
-  uint32_t m = (remaining / 1000) / 60;
-  uint32_t s = (remaining / 1000) % 60;
-
-  countdown.showNumberDecEx(m * 100 + s, remaining / 500 & 1 ? 0b01000000 : 0, true);
-}
+DS3231 rtc;
+TM1637Display countdown(PIN_CLK, PIN_DIO);
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 size_t broadcast(const uint8_t* const data, const size_t len)
 {
@@ -142,27 +126,125 @@ Status report(const Address address)
   return rpt;
 }
 
-void screen()
+void renderState()
 {
-  display.clearDisplay();
+  static BaseState lastState = BaseState::EXPLODED;
+
+  if (lastState == state)
+    return;
+
+  int16_t x1, y1;
+  uint16_t x2, y2;
+
+  const char* str = "ERROR";
+  switch (state)
+  {
+    case BaseState::INITIALISATION:
+      str = "INIT";
+    break;
+    case BaseState::READY:
+      str = "READY";
+    break;
+    case BaseState::ARMED:
+      str = "ARMED";
+    break;
+    case BaseState::DEFUSED:
+      str = "DEFUSED";
+    break;
+    case BaseState::EXPLODED:
+      str = "EXPLODED";
+    break;
+  }
+
+  tft.fillRect(0, 64, 128, 96, COLOUR_BLACK);
+  tft.setTextColor(COLOUR_RED);
+  tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+  tft.setCursor((128 - x2) / 2, 64);
+  tft.print(str);
+  lastState = state;
+}
+
+void displayCountdown()
+{
+  const int32_t remaining = max((start + settings::time_allowed) - (end ? end : now), 0);
+
+  uint32_t m = (remaining / 1000) / 60;
+  uint32_t s = (remaining / 1000) % 60;
+
+  countdown.showNumberDecEx(m * 100 + s, remaining / 500 & 1 ? 0b01000000 : 0, true);
+}
+
+void renderSerial() {
+  int16_t x1, y1;
+  uint16_t x2, y2;
+
+  tft.fillRect(0, 64, 128, 96, COLOUR_BLACK);
+  tft.getTextBounds(serial, 0, 0, &x1, &y1, &x2, &y2);
+  tft.setCursor((128 - x2) / 2, 64);
+  tft.setTextColor(COLOUR_YELLOW);
+  tft.print(serial);
+}
+
+void render()
+{
+  static uint8_t lastSeconds = 61;
+  static uint8_t lastDay = 32;
 
   int16_t x1, y1;
   uint16_t x2, y2;
 
   if (state != BaseState::INITIALISATION && state != BaseState::READY)
   {
-    display.getTextBounds(serial, 0, 0, &x1, &y1, &x2, &y2);
-    display.setCursor((128 - x2) / 2, (32 - y2) / 2);
-    display.print(serial);
-
-    display_timeRemaining();
+    displayCountdown();
   }
   else
   {
-    display_state();
+    renderState();
   }
 
-  display.display();
+  const DateTime dt = rtc.getDateTime();
+  if (dt.seconds != lastSeconds)
+  {
+    String str;
+    if (dt.hours < 10)
+      str += "0";
+    str += dt.hours;
+    str += ":";
+    if (dt.minutes < 10)
+      str += "0";
+    str += dt.minutes;
+    str += ":";
+    if (dt.seconds < 10)
+      str += "0";
+    str += dt.seconds;
+
+    tft.fillRect(0, 18, 128, 34, COLOUR_BLACK);
+    tft.setTextColor(COLOUR_WHITE);
+    tft.getTextBounds(str.c_str(), 0, 0, &x1, &y1, &x2, &y2);
+    tft.setTextSize(2);
+    tft.setCursor((128 - x2) / 2, 18);
+    tft.print(str.c_str());
+    lastSeconds = dt.seconds;
+  }
+  if (dt.day != lastDay)
+  {
+    String str;
+    str += dt.year;
+    str += "-";
+    if (dt.month < 10)
+      str += "0";
+    str += dt.month;
+    str += "-";
+    if (dt.day < 10)
+      str += "0";
+    str += dt.day;
+
+    tft.getTextBounds(str.c_str(), 0, 0, &x1, &y1, &x2, &y2);
+    tft.fillRect(0, 0, 128, 16, COLOUR_BLACK);
+    tft.setCursor((128 - x2) / 2, 2);
+    tft.print(str.c_str());
+    lastDay = dt.day;
+  }
 }
 
 void generate()
@@ -224,8 +306,9 @@ void reset()
 
   scan();
 
+  displayCountdown();
   // write to the screen once, since loop will block writes until all modules are ready
-  screen();
+  render();
 
   state = BaseState::INITIALISATION;
 
@@ -240,32 +323,38 @@ void setup()
 {
   countdown.setBrightness(0x01);
 
+  randomSeed(analogRead(PIN_SEED));
+
+  pinMode(PIN_CONFIG, INPUT);
+  pinMode(PIN_BACK, INPUT);
+
   pinMode(PIN_BUZZER_STRIKE, OUTPUT);
   pinMode(PIN_BUZZER_DISARM, OUTPUT);
   pinMode(PIN_START, INPUT);
   pinMode(PIN_RESET, INPUT);
 
-  randomSeed(analogRead(PIN_SEED));
-
-
   Wire.begin();
 
-  // setup display
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  rtc.begin();
+  rtc.setDateTime(DateTime(2020, 2, 26, 18, 26, 0));
+
+  tft.init();
+  tft.setRotation(3);
+  tft.fillScreen(COLOUR_BLACK);
+
+
+  if (!SD.begin(PIN_SD_CS))
   {
-    while (1)
-    {
-      digitalWrite(LED_BUILTIN, 1);
-      delay(250);
-      digitalWrite(LED_BUILTIN, 0);
-      delay(250);
-    }
+    tft.setCursor(0, 0);
+    tft.print("SD failed");
+    while (1);
   }
-  display.clearDisplay();
-  display.setTextColor(WHITE);
-  display.setTextWrap(false);
-  display.setTextSize(2);
-  display.dim(1);
+
+
+  // make sure storage is setup correctly
+  if (!SD.exists("/logs"))
+    SD.mkdir("/logs");
+
 
   reset();
 }
@@ -297,15 +386,41 @@ void loop()
     return;
   }
 
-  if (state == BaseState::READY && digitalRead(PIN_START))
+  if (state == BaseState::READY)
   {
-    start = now;
-    state = BaseState::ARMED;
+    if (digitalRead(PIN_START))
+    {
+      start = now;
+      state = BaseState::ARMED;
 
-    Message tmsg(OpCode::ARM);
-    broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+      Message tmsg(OpCode::ARM);
+      broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+
+      renderSerial();
+    }
+    else if (digitalRead(PIN_CONFIG))
+    {
+      state = BaseState::CONFIG;
+    }
   }
 
+  if (state == BaseState::CONFIG)
+  {
+    // PIN_START is up
+    // PIN_RESET is down
+    if (digitalRead(PIN_START))
+    {
+      rtc.setDateTime(DateTime(rtc.getDateTime().now() + 1));
+    }
+    else if (digitalRead(PIN_RESET))
+    {
+      rtc.setDateTime(DateTime(rtc.getDateTime().now() - 1));
+    }
+    else if (digitalRead(PIN_BACK))
+    {
+      state = BaseState::INITIALISATION;
+    }
+  }
 
   if (state == BaseState::ARMED)
   {
@@ -360,5 +475,5 @@ void loop()
     }
   }
 
-  screen();
+  render();
 }

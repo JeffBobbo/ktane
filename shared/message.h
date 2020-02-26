@@ -23,7 +23,7 @@ enum class BaseState : uint8_t
   ARMED, // gameplay is running
   DEFUSED, // win state
   EXPLODED, // lose state
-  // CONFIGURE // configuration module in, special case
+  CONFIG // configu mode, not in normal flow
 };
 
 enum class ModuleState : uint8_t
