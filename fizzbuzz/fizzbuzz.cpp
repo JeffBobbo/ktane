@@ -106,7 +106,7 @@ void arm()
       break;
   }
   choice = Choice::NONE;
-  start = millis() + random(30, 60) * 1000;
+  start = millis() + random(60, 75) * 1000;
 
   digitalWrite(PIN_RED, 0);
   digitalWrite(PIN_GREEN, 1);
