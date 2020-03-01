@@ -49,9 +49,7 @@ constexpr uint16_t COLOUR_MAGENTA = 0xF81F;
 constexpr uint16_t COLOUR_YELLOW  = 0xFFE0;
 constexpr uint16_t COLOUR_WHITE   = 0xFFFF;
 
-// game state, and strikes
 BaseState state;
-uint8_t strikes;
 
 // timing
 uint32_t start;
@@ -63,12 +61,12 @@ uint32_t STRIKE_BUZZ_TIME = 300;
 uint32_t DISARM_BUZZ_TIME = 200;
 
 Address modules[address::NUM_MODULES];
-size_t moduleCount;
-size_t disarmed;
-char serial[SERIAL_LENGTH+1];
+Indicators indicators;
 
-uint8_t bindicator;
-uint8_t nindicator;
+uint8_t& strikes = indicators.strikes;
+uint8_t& moduleCount = indicators.modules;
+uint8_t& disarmed = indicators.disarmed;
+
 
 DS3231 rtc;
 TM1637Display countdown(PIN_CLK, PIN_DIO);
@@ -126,11 +124,11 @@ Status report(const Address address)
   return rpt;
 }
 
-void renderState()
+void renderState(const bool force = false)
 {
   static BaseState lastState = BaseState::EXPLODED;
 
-  if (lastState == state)
+  if (!force && lastState == state)
     return;
 
   int16_t x1, y1;
@@ -179,13 +177,13 @@ void renderSerial() {
   uint16_t x2, y2;
 
   tft.fillRect(0, 64, 128, 96, COLOUR_BLACK);
-  tft.getTextBounds(serial, 0, 0, &x1, &y1, &x2, &y2);
+  tft.getTextBounds(indicators.serial, 0, 0, &x1, &y1, &x2, &y2);
   tft.setCursor((128 - x2) / 2, 64);
   tft.setTextColor(COLOUR_YELLOW);
-  tft.print(serial);
+  tft.print(indicators.serial);
 }
 
-void render()
+void render(const bool force = false)
 {
   static uint8_t lastSeconds = 61;
   static uint8_t lastDay = 32;
@@ -193,56 +191,34 @@ void render()
   int16_t x1, y1;
   uint16_t x2, y2;
 
-  if (state != BaseState::INITIALISATION && state != BaseState::READY)
+  if (state == BaseState::INITIALISATION || state == BaseState::READY)
   {
-    displayCountdown();
-  }
-  else
-  {
-    renderState();
+    renderState(force);
   }
 
   const DateTime dt = rtc.getDateTime();
-  if (dt.seconds != lastSeconds)
+  if (force || dt.seconds != lastSeconds)
   {
-    String str;
-    if (dt.hours < 10)
-      str += "0";
-    str += dt.hours;
-    str += ":";
-    if (dt.minutes < 10)
-      str += "0";
-    str += dt.minutes;
-    str += ":";
-    if (dt.seconds < 10)
-      str += "0";
-    str += dt.seconds;
+    char str[8];
+    sprintf(str, "%02d:%02d:%02d", dt.hours, dt.minutes, dt.seconds);
 
     tft.fillRect(0, 18, 128, 34, COLOUR_BLACK);
     tft.setTextColor(COLOUR_WHITE);
-    tft.getTextBounds(str.c_str(), 0, 0, &x1, &y1, &x2, &y2);
+    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
     tft.setTextSize(2);
     tft.setCursor((128 - x2) / 2, 18);
-    tft.print(str.c_str());
+    tft.print(str);
     lastSeconds = dt.seconds;
   }
-  if (dt.day != lastDay)
+  if (force || dt.day != lastDay)
   {
-    String str;
-    str += dt.year;
-    str += "-";
-    if (dt.month < 10)
-      str += "0";
-    str += dt.month;
-    str += "-";
-    if (dt.day < 10)
-      str += "0";
-    str += dt.day;
+    char str[10];
+    sprintf(str, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
 
-    tft.getTextBounds(str.c_str(), 0, 0, &x1, &y1, &x2, &y2);
+    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
     tft.fillRect(0, 0, 128, 16, COLOUR_BLACK);
     tft.setCursor((128 - x2) / 2, 2);
-    tft.print(str.c_str());
+    tft.print(str);
     lastDay = dt.day;
   }
 }
@@ -253,27 +229,19 @@ void generate()
   {
     const uint8_t c = random(46);
     if (c < 26)
-      serial[i] = 'a' + c;
+      indicators.serial[i] = 'a' + c;
     else if (c < 46)
-      serial[i] = '0' + (c - 26) % 10;
+      indicators.serial[i] = '0' + (c - 26) % 10;
     else
-      serial[i] = '?';
+      indicators.serial[i] = '?';
   }
-  serial[SERIAL_LENGTH] = 0;
+  indicators.serial[SERIAL_LENGTH] = 0;
 }
 
 void indicate()
 {
   Message msg;
   msg.opcode = OpCode::INDICATORS;
-
-  Indicators indicators;
-  indicators.numerical = nindicator;
-  indicators.binary = bindicator;
-  indicators.strikes = strikes;
-  indicators.modules = moduleCount;
-  indicators.disarmed = disarmed;
-  strncpy(reinterpret_cast<char*>(indicators.serial), serial, SERIAL_LENGTH+1);
 
   memcpy(msg.data, &indicators, sizeof(indicators));
 
@@ -294,8 +262,8 @@ void reset()
   // generate random serial hash
   generate();
 
-  bindicator = random(16);
-  nindicator = random(100);
+  indicators.numerical = random(100);
+  indicators.binary = random(16);
 
   // scan for modules on the bus
   // delay to ensure they're all powered up
@@ -335,21 +303,22 @@ void setup()
 
   Wire.begin();
 
-  rtc.begin();
-  rtc.setDateTime(DateTime(2020, 2, 26, 18, 26, 0));
-
   tft.init();
   tft.setRotation(3);
   tft.fillScreen(COLOUR_BLACK);
-
+  tft.setCursor(16, 16);
 
   if (!SD.begin(PIN_SD_CS))
   {
-    tft.setCursor(0, 0);
     tft.print("SD failed");
     while (1);
   }
 
+  if (!rtc.init())
+  {
+    tft.print("RTC failed");
+    while (1);
+  }
 
   // make sure storage is setup correctly
   if (!SD.exists("/logs"))
@@ -401,6 +370,7 @@ void loop()
     else if (digitalRead(PIN_CONFIG))
     {
       state = BaseState::CONFIG;
+      tft.fillScreen(COLOUR_BLACK);
     }
   }
 
@@ -419,7 +389,10 @@ void loop()
     else if (digitalRead(PIN_BACK))
     {
       state = BaseState::INITIALISATION;
+      render(true);
     }
+
+    return;
   }
 
   if (state == BaseState::ARMED)
@@ -475,5 +448,7 @@ void loop()
     }
   }
 
+  if (state != BaseState::INITIALISATION && state != BaseState::READY)
+    displayCountdown();
   render();
 }
