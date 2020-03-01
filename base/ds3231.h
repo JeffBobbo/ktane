@@ -150,9 +150,16 @@ class DS3231
 public:
   DS3231(const uint8_t i2cAddress = DEFAULT_ADDRESS, TwoWire* const twowire = &Wire) : address(i2cAddress), twi(twowire) {}
 
-  void begin()
+  bool begin()
   {
     twi->begin();
+    return init();
+  }
+
+  bool init()
+  {
+    twi->beginTransmission(address);
+    return twi->endTransmission() == 0;
   }
 
   DateTime getDateTime()
