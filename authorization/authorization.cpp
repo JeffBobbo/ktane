@@ -8,7 +8,12 @@
 const Address addr = address::AUTHORIZATION;
 const uint8_t PIN_DISARM_LED = 3;
 
-const uint8_t PIN_ERROR_LED = 2;
+const uint8_t PIN_LED_1 = 8;
+const uint8_t PIN_LED_2 = 7;
+const uint8_t PIN_LED_3 = 6;
+const uint8_t PIN_LED_4 = 5;
+
+const uint8_t PIN_BUZZER = 4;
 
 const uint8_t PIN_RESET = 9;
 const uint8_t PIN_SELECT = 10;
@@ -16,6 +21,7 @@ const uint8_t PIN_SELECT = 10;
 const uint8_t PSK[8] = {0x28, 0x54, 0x8E, 0xD1, 0x39, 0x32, 0xCA, 0x58};
 
 uint32_t lastError = 0;
+uint32_t lastBuzz = 0;
 
 MFRC522 mfrc522(PIN_SELECT, PIN_RESET);   // Create MFRC522 instance.
 
@@ -27,7 +33,10 @@ void initialise()
 {
   Serial.begin(9600);
 
-  pinMode(PIN_ERROR_LED, OUTPUT);
+  pinMode(PIN_LED_1, OUTPUT);
+  pinMode(PIN_LED_2, OUTPUT);
+  pinMode(PIN_LED_3, OUTPUT);
+  pinMode(PIN_LED_4, OUTPUT);
 
   SPI.begin();
   mfrc522.PCD_Init();
@@ -40,8 +49,10 @@ void initialise()
 
 void reset()
 {
-  Serial.print("reset");
-  digitalWrite(PIN_ERROR_LED, 0);
+  digitalWrite(PIN_LED_1, 0);
+  digitalWrite(PIN_LED_2, 0);
+  digitalWrite(PIN_LED_3, 0);
+  digitalWrite(PIN_LED_4, 0);
 }
 
 
@@ -66,21 +77,29 @@ void error()
 {
   lastError = millis();
 
+  tone(PIN_BUZZER, 440);
+
   // stop any communication
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
 }
 
+void config()
+{
+}
+
 void idle()
 {
-  if (lastError + 500 > millis())
+  if (lastError + 500 <= millis())
   {
-    digitalWrite(PIN_ERROR_LED, 1);
-    return;
+    digitalWrite(PIN_LED_1, 0);
+    digitalWrite(PIN_LED_2, 0);
+    digitalWrite(PIN_LED_3, 0);
+    digitalWrite(PIN_LED_4, 0);
   }
-  else
+  if (lastBuzz + 500 <= millis())
   {
-    digitalWrite(PIN_ERROR_LED, 0);
+    noTone(PIN_BUZZER);
   }
 
   // if no tag present, return -- this prevents us from processing the same tag twice
@@ -97,7 +116,8 @@ void idle()
     error();
     return;
   }
-
+  digitalWrite(PIN_LED_1, 1);
+  delay(50);
 
   // authenticate
   MFRC522::StatusCode status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, TRAILER, &key, &(mfrc522.uid));
@@ -112,6 +132,8 @@ void idle()
     error();
     return;
   }
+  digitalWrite(PIN_LED_2, 1);
+  delay(50);
 
   // setup a buffer to store retrieved data in
   uint8_t buffer[18];
@@ -123,6 +145,8 @@ void idle()
     error();
     return;
   }
+  digitalWrite(PIN_LED_3, 1);
+  delay(50);
 
   // check that the tag contains our pre-shared key
   for (uint8_t i = 0; i < 8; ++i)
@@ -133,6 +157,8 @@ void idle()
       return;
     }
   }
+  digitalWrite(PIN_LED_4, 1);
+  delay(50);
 
   // test
   if (buffer[15] == user)
@@ -147,8 +173,18 @@ void idle()
 
 void defuse()
 {
+  noTone(PIN_BUZZER);
+  digitalWrite(PIN_LED_1, 0);
+  digitalWrite(PIN_LED_2, 0);
+  digitalWrite(PIN_LED_3, 0);
+  digitalWrite(PIN_LED_4, 0);
 }
 
 void detonate()
 {
+  noTone(PIN_BUZZER);
+  digitalWrite(PIN_LED_1, 0);
+  digitalWrite(PIN_LED_2, 0);
+  digitalWrite(PIN_LED_3, 0);
+  digitalWrite(PIN_LED_4, 0);
 }
