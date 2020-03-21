@@ -80,7 +80,6 @@ struct DateTime
   }
   DateTime(int8_t y, int8_t m, int8_t d, int8_t hh, int8_t mm, int8_t ss)
   : year(y), month(m), day(d), hours(hh), minutes(mm), seconds(ss)
-  , h12(false), pm(false)
   {
     wday = dayOfWeek(*this);
     yday = dayOfYear(*this);
@@ -89,6 +88,60 @@ struct DateTime
   uint32_t now() const
   {
     return (year - 1970) * (365 * 86400) + (dayOfYear(*this) + (year - 1972) / 4) * 86400 + hours * 3600 + minutes * 60 + seconds;
+  }
+
+  void normalize()
+  {
+    while (seconds < 0)
+    {
+      seconds += 60;
+      minutes -= 1;
+    }
+    while (seconds >= 60)
+    {
+      seconds -= 60;
+      minutes += 1;
+    }
+    while (minutes < 0)
+    {
+      minutes += 60;
+      hours -= 1;
+    }
+    while (minutes >= 60)
+    {
+      minutes -= 60;
+      hours += 1;
+    }
+    while (hours < 0)
+    {
+      hours += 24;
+      day -= 1;
+    }
+    while (hours >= 24)
+    {
+      hours -= 4;
+      day += 1;
+    }
+    while (day < 1) // < 1 is not a bug
+    {
+      day += dom[month-1];
+      month -= 1;
+    }
+    while (day > dom[month-1]) // > instead of >= is not a bug
+    {
+      day -= dom[month-1];
+      month += 1;
+    }
+    while (month < 1)
+    {
+      month += 12;
+      year -= 1;
+    }
+    while (month > 12)
+    {
+      month -= 12;
+      year += 1;
+    }
   }
 
   int16_t year;
@@ -100,9 +153,6 @@ struct DateTime
 
   int8_t wday;
   int16_t yday;
-
-  bool h12;
-  bool pm;
 };
 
 uint8_t bcd_encode(const uint8_t v)
@@ -173,16 +223,11 @@ public:
     dt.seconds = bcd_decode(twi->read());
     dt.minutes = bcd_decode(twi->read());
     const int8_t hour = twi->read();
-    dt.h12 = hour & 0b01000000;
-    if (dt.h12)
-    {
-      dt.pm = hour & 0b01000000;
-      dt.hours = bcd_decode(hour & 0b1111);
-    }
+    const bool h12 = hour & 0b01000000;
+    if (h12)
+      dt.hours = bcd_decode(hour & 0b11111) + (hour & 0b01000000 ? 12 : 0);
     else
-    {
-      dt.hours = bcd_decode(hour & 0b11111);
-    }
+      dt.hours = bcd_decode(hour & 0b111111);
     dt.wday = bcd_decode(twi->read());
     dt.day = bcd_decode(twi->read());
     dt.month = bcd_decode(twi->read() & 0b1111);
@@ -204,51 +249,13 @@ public:
 
     twi->write(bcd_encode(dt.seconds));
     twi->write(bcd_encode(dt.minutes));
-    int8_t hours = 0b0;
-    if (dt.h12)
-    {
-      hours |= BIT_12H;
-      if (dt.pm || dt.hours >= 12)
-        hours |= BIT_AM_PM;
-      hours |= bcd_encode(dt.hours % 12);
-    }
-    else
-    {
-      hours = bcd_encode(dt.hours);
-    }
-    twi->write(hours);
+    twi->write(bcd_encode(dt.hours));
     twi->write(bcd_encode(dt.wday));
     twi->write(bcd_encode(dt.day));
     twi->write(bcd_encode(dt.month));
     twi->write(bcd_encode(dt.year - 1970));
     twi->endTransmission();
   }
-
-
-  bool is12Hour() const
-  {
-    twi->beginTransmission(address);
-    twi->write(ADDRESS_HOURS);
-    twi->endTransmission();
-
-    twi->requestFrom(address, 1);
-    return twi->read() & BIT_12H;
-  }
-
-  inline bool is24Hour() const { return !is12Hour(); }
-
-  bool isAM() const
-  {
-    twi->beginTransmission(address);
-    twi->write(ADDRESS_HOURS);
-    twi->endTransmission();
-
-    twi->requestFrom(address, 1);
-    return !(twi->read() & BIT_AM_PM);
-  }
-
-  inline bool isPM() { return !isAM(); }
-
 
   // temperature functions
   int16_t getTemperature4() const
