@@ -23,7 +23,6 @@ namespace address
   const Address OLED_DISPLAY = 0x3C; // 60
   const Address INDICATORS = 61;
   const Address LID = 62;
-  const Address CONFIG = 63;
   const Address RTC = 0x68;
 
   // a list of modules we should broadcast to
