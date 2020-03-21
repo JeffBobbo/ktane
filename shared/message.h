@@ -23,7 +23,7 @@ enum class BaseState : uint8_t
   ARMED, // gameplay is running
   DEFUSED, // win state
   EXPLODED, // lose state
-  CONFIG // configu mode, not in normal flow
+  CONFIG // config mode, not in normal flow
 };
 
 enum class ModuleState : uint8_t
@@ -32,7 +32,8 @@ enum class ModuleState : uint8_t
   READY, // once it's started up, but waiting for base
   ARMED, // base has issued ARM message, game in progress
   DISARMED, // this module has been successfully disarmed
-  STOP // game over state, either defused or exploded
+  STOP, // game over state, either defused or exploded
+  CONFIG // config mode, not in normal flow
 };
 
 struct Status

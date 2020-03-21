@@ -19,6 +19,8 @@ void idle();
 void defuse();
 void detonate();
 
+void (*config_cb)() = nullptr;
+
 extern const Address addr;
 #ifndef UTILITY_MODULE
 extern const uint8_t PIN_DISARM_LED;
@@ -86,6 +88,9 @@ void receiveEvent(int count)
       memcpy(&indicators, msg.data, sizeof(indicators));
       onIndicators();
     break;
+    case OpCode::CONFIGURE:
+      state = ModuleState::CONFIG;
+    break;
   }
 }
 
@@ -116,11 +121,12 @@ void setup()
 
 void loop()
 {
-  // noop while not ARMED
-  if (state != ModuleState::ARMED)
-    return;
+  if (state == ModuleState::CONFIG && config_cb)
+    (*config_cb)();
 
-  idle();
+  // only run idle when we're ARMED
+  if (state == ModuleState::ARMED)
+    idle();
 }
 
 

@@ -24,6 +24,7 @@ namespace address
   const Address INDICATORS = 61;
   const Address LID = 62;
   const Address CONFIG = 63;
+  const Address RTC = 0x68;
 
   // a list of modules we should broadcast to
   const Address modules[] = {
@@ -37,7 +38,7 @@ namespace address
     MARITIME,
     ASCII
   };
-  const size_t NUM_MODULES = sizeof(modules) / sizeof(Address);
+  const uint8_t NUM_MODULES = sizeof(modules) / sizeof(Address);
 
   const Address needy[] = {
     DEADMAN,
@@ -47,7 +48,7 @@ namespace address
 
   bool isNeedy(const Address module)
   {
-    for (size_t i = 0; i < sizeof(needy) / sizeof(Address); ++i)
+    for (uint8_t i = 0; i < sizeof(needy) / sizeof(Address); ++i)
     {
       if (module == needy[i])
         return true;

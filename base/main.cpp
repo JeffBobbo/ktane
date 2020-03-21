@@ -6,10 +6,11 @@
 #include <TM1637Display.h>
 
 #include <Adafruit_GFX.h>
-#include <XTronical_ST7735.h>
+#include <Adafruit_ST7735.h>
 
 #include "shared/address.h"
 #include "shared/config.h"
+#include "shared/debounce.h"
 #include "shared/message.h"
 
 #include "ds3231.h"
@@ -38,6 +39,11 @@ const int8_t TFT_CS = 10;
 const int8_t TFT_RST = -1;
 const int8_t TFT_DC = 9;
 
+Debounce pStart(PIN_START);
+Debounce pReset(PIN_RESET);
+Debounce pConfig(PIN_CONFIG);
+Debounce pBack(PIN_BACK);
+
 // colour stuff for the TFT
 constexpr uint16_t colour(const float r, const float g, const float b);
 constexpr uint16_t COLOUR_BLACK   = 0x0000;
@@ -64,17 +70,15 @@ Address modules[address::NUM_MODULES];
 Indicators indicators;
 
 uint8_t& strikes = indicators.strikes;
-uint8_t& moduleCount = indicators.modules;
-uint8_t& disarmed = indicators.disarmed;
 
 
 DS3231 rtc;
 TM1637Display countdown(PIN_CLK, PIN_DIO);
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
-size_t broadcast(const uint8_t* const data, const size_t len)
+void broadcast(const uint8_t* const data, const size_t len)
 {
-  for (size_t i = 0; i < moduleCount; ++i)
+  for (uint8_t i = 0; i < indicators.modules; ++i)
   {
     Wire.beginTransmission(modules[i]);
     Wire.write(data, len);
@@ -88,14 +92,6 @@ size_t broadcast(const uint8_t* const data, const size_t len)
   Wire.beginTransmission(address::LID),
   Wire.write(data, len);
   Wire.endTransmission();
-
-  return len;
-}
-
-template <typename T>
-size_t broadcast(T& t)
-{
-  return broadcast(reinterpret_cast<uint8_t*>(&t), sizeof(t));
 }
 
 bool detect(const uint8_t address)
@@ -106,10 +102,10 @@ bool detect(const uint8_t address)
 
 void scan()
 {
-  for (size_t i = 0; i < address::NUM_MODULES; ++i)
+  for (uint8_t i = 0; i < address::NUM_MODULES; ++i)
   {
     if (detect(address::modules[i]))
-      modules[moduleCount++] = address::modules[i];
+      modules[indicators.modules++] = address::modules[i];
   }
 }
 
@@ -118,48 +114,10 @@ Status report(const Address address)
   Wire.requestFrom(address, sizeof(Status));
 
   Status rpt;
-  for (size_t i = 0; i < sizeof(rpt); ++i)
+  for (uint8_t i = 0; i < sizeof(rpt); ++i)
     reinterpret_cast<uint8_t*>(&rpt)[i] = Wire.read();
 
   return rpt;
-}
-
-void renderState(const bool force = false)
-{
-  static BaseState lastState = BaseState::EXPLODED;
-
-  if (!force && lastState == state)
-    return;
-
-  int16_t x1, y1;
-  uint16_t x2, y2;
-
-  const char* str = "ERROR";
-  switch (state)
-  {
-    case BaseState::INITIALISATION:
-      str = "INIT";
-    break;
-    case BaseState::READY:
-      str = "READY";
-    break;
-    case BaseState::ARMED:
-      str = "ARMED";
-    break;
-    case BaseState::DEFUSED:
-      str = "DEFUSED";
-    break;
-    case BaseState::EXPLODED:
-      str = "EXPLODED";
-    break;
-  }
-
-  tft.fillRect(0, 64, 128, 96, COLOUR_BLACK);
-  tft.setTextColor(COLOUR_RED);
-  tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-  tft.setCursor((128 - x2) / 2, 64);
-  tft.print(str);
-  lastState = state;
 }
 
 void displayCountdown()
@@ -170,57 +128,6 @@ void displayCountdown()
   uint32_t s = (remaining / 1000) % 60;
 
   countdown.showNumberDecEx(m * 100 + s, remaining / 500 & 1 ? 0b01000000 : 0, true);
-}
-
-void renderSerial() {
-  int16_t x1, y1;
-  uint16_t x2, y2;
-
-  tft.fillRect(0, 64, 128, 96, COLOUR_BLACK);
-  tft.getTextBounds(indicators.serial, 0, 0, &x1, &y1, &x2, &y2);
-  tft.setCursor((128 - x2) / 2, 64);
-  tft.setTextColor(COLOUR_YELLOW);
-  tft.print(indicators.serial);
-}
-
-void render(const bool force = false)
-{
-  static uint8_t lastSeconds = 61;
-  static uint8_t lastDay = 32;
-
-  int16_t x1, y1;
-  uint16_t x2, y2;
-
-  if (state == BaseState::INITIALISATION || state == BaseState::READY)
-  {
-    renderState(force);
-  }
-
-  const DateTime dt = rtc.getDateTime();
-  if (force || dt.seconds != lastSeconds)
-  {
-    char str[8];
-    sprintf(str, "%02d:%02d:%02d", dt.hours, dt.minutes, dt.seconds);
-
-    tft.fillRect(0, 18, 128, 34, COLOUR_BLACK);
-    tft.setTextColor(COLOUR_WHITE);
-    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-    tft.setTextSize(2);
-    tft.setCursor((128 - x2) / 2, 18);
-    tft.print(str);
-    lastSeconds = dt.seconds;
-  }
-  if (force || dt.day != lastDay)
-  {
-    char str[10];
-    sprintf(str, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
-
-    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
-    tft.fillRect(0, 0, 128, 16, COLOUR_BLACK);
-    tft.setCursor((128 - x2) / 2, 2);
-    tft.print(str);
-    lastDay = dt.day;
-  }
 }
 
 void generate()
@@ -245,7 +152,7 @@ void indicate()
 
   memcpy(msg.data, &indicators, sizeof(indicators));
 
-  broadcast(msg);
+  broadcast(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 }
 
 void reset()
@@ -253,12 +160,12 @@ void reset()
   end = 0;
   now = 0;
   start = 0;
-  strikes = 0;
+  indicators.strikes = 0;
   lastStrike = 0;
   lastDisarm = 0;
 
   memset(modules, 0, address::NUM_MODULES);
-  moduleCount = 0;
+  indicators.modules = 0;
   // generate random serial hash
   generate();
 
@@ -272,13 +179,12 @@ void reset()
   scan();
 
   Message rmsg(OpCode::RESET);
-  broadcast(rmsg);
+  broadcast(reinterpret_cast<uint8_t*>(&rmsg), sizeof(rmsg));
 
   state = BaseState::INITIALISATION;
   // write to the screen once, since loop will block writes until all modules are ready
 
   displayCountdown();
-  render();
 
   // transmit info to all
   indicate();
@@ -293,17 +199,18 @@ void setup()
 
   randomSeed(analogRead(PIN_SEED));
 
-  pinMode(PIN_CONFIG, INPUT);
-  pinMode(PIN_BACK, INPUT);
+  pStart.init();
+  pReset.init();
+  pConfig.init();
+  pBack.init();
 
   pinMode(PIN_BUZZER_STRIKE, OUTPUT);
   pinMode(PIN_BUZZER_DISARM, OUTPUT);
-  pinMode(PIN_START, INPUT);
-  pinMode(PIN_RESET, INPUT);
 
   Wire.begin();
 
-  tft.init();
+  //tft.init();
+  tft.initR(INITR_BLACKTAB);
   tft.setRotation(3);
   tft.fillScreen(COLOUR_BLACK);
   tft.setCursor(16, 16);
@@ -328,127 +235,373 @@ void setup()
   reset();
 }
 
+void renderDateTime(const bool force = false)
+{
+  static uint8_t lastSeconds = 61;
+  static uint8_t lastDay = 32;
+
+  int16_t x1, y1;
+  uint16_t x2, y2;
+  const DateTime dt = rtc.getDateTime();
+  if (force || dt.seconds != lastSeconds)
+  {
+    char str[8];
+    sprintf(str, "%02d:%02d:%02d", dt.hours, dt.minutes, dt.seconds);
+
+    tft.fillRect(0, 18, tft.width(), 16, COLOUR_BLACK);
+    tft.setTextColor(COLOUR_WHITE);
+    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+    tft.setTextSize(2);
+    tft.setCursor((tft.width() - x2) / 2, 18);
+    tft.print(str);
+    lastSeconds = dt.seconds;
+  }
+  if (force || dt.day != lastDay)
+  {
+    char str[10];
+    sprintf(str, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+
+    tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+    tft.fillRect(0, 0, tft.width(), 16, COLOUR_BLACK);
+    tft.setCursor((tft.width() - x2) / 2, 2);
+    tft.print(str);
+    lastDay = dt.day;
+  }
+}
+
+void renderState(const bool force = false)
+{
+  static BaseState lastState = BaseState::EXPLODED;
+
+  if (!force && lastState == state)
+    return;
+
+  int16_t x1, y1;
+  uint16_t x2, y2;
+
+  const char* str = "ERROR";
+  switch (state)
+  {
+    case BaseState::INITIALISATION:
+      str = "INIT";
+    break;
+    case BaseState::READY:
+      str = "READY";
+    break;
+  }
+
+  tft.fillRect(0, 64, tft.width(), 16, COLOUR_BLACK);
+  tft.setTextColor(COLOUR_RED);
+  tft.setTextSize(2);
+  tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+  tft.setCursor((tft.width() - x2) / 2, 64);
+  tft.print(str);
+  lastState = state;
+}
+
+void renderSerial()
+{
+  int16_t x1, y1;
+  uint16_t x2, y2;
+
+  tft.fillRect(0, 64, tft.width(), 16, COLOUR_BLACK);
+  tft.getTextBounds(indicators.serial, 0, 0, &x1, &y1, &x2, &y2);
+  tft.setCursor((tft.width() - x2) / 2, 64);
+  tft.setTextColor(COLOUR_YELLOW);
+  tft.print(indicators.serial);
+}
+
+void initActions()
+{
+  tft.fillScreen(COLOUR_BLACK);
+
+  renderDateTime(true);
+  renderState(true);
+
+  bool allReady = false;
+  while (!allReady)
+  {
+    allReady = true;
+    for (uint8_t i = 0; i < indicators.modules; ++i)
+    {
+      Status status = report(modules[i]);
+      if (status.state == ModuleState::INITIALISATION)
+      {
+        allReady = false;
+        break;
+      }
+      delay(10);
+    }
+    // small delay so we don't lock up all the slaves in their callbacks
+    delay(10);
+    renderDateTime();
+  }
+  state = BaseState::READY;
+
+  tft.fillScreen(COLOUR_BLACK);
+  renderDateTime(true);
+  renderState(true);
+}
+
+void readyActions()
+{
+  renderDateTime();
+  renderState();
+  if (pStart.is_released())
+  {
+    start = now;
+    state = BaseState::ARMED;
+
+    tft.fillScreen(COLOUR_BLACK);
+    renderDateTime(true);
+    renderSerial();
+
+    Message tmsg(OpCode::ARM);
+    broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+
+  }
+  else if (pConfig.is_released())
+  {
+    state = BaseState::CONFIG;
+    Message tmsg(OpCode::CONFIGURE);
+    broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+  }
+}
+
+void configActions()
+{
+  tft.fillScreen(COLOUR_BLACK);
+  tft.setCursor(16, 0);
+  tft.print("CONFIG");
+
+  uint8_t mode = 0;
+  const uint8_t NUM_MODES = 2; // DATE, TIME
+  bool selected = false;
+
+  char* modes[] = {"Date", "Time"};
+
+  int16_t x1, y1;
+  uint16_t x2, y2;
+
+  DateTime dt = rtc.getDateTime();
+
+  // start is up
+  // reset is down
+  // config is select
+  // back is back
+  while (state != BaseState::INITIALISATION)
+  {
+    now = millis();
+    pStart.update();
+    pReset.update();
+    pConfig.update();
+    pBack.update();
+
+    if (selected == false)
+    {
+      if (pConfig.is_released())
+      {
+        selected = true;
+        tft.fillRect(0, 16, tft.width(), 16, COLOUR_BLACK);
+        tft.setCursor(0, 16);
+        tft.setTextColor(COLOUR_GREEN);
+        tft.print(modes[mode]);
+
+        if (mode == 0)
+        {
+          char str[10];
+          sprintf(str, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+
+          tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+          tft.fillRect(0, 34, tft.width(), 50, COLOUR_BLACK);
+          tft.setCursor((tft.width() - x2) / 2, 34);
+          tft.setTextColor(COLOUR_WHITE);
+          tft.print(str);
+
+          tft.fillRect(0, 50, tft.width() / 3, 2, COLOUR_RED);
+        }
+        else if (mode == 1)
+        {
+          char str[8];
+          sprintf(str, "%02d:%02d:%02d", dt.hours, dt.minutes, dt.seconds);
+
+          tft.fillRect(0, 34, tft.width(), 50, COLOUR_BLACK);
+          tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+          tft.setTextSize(2);
+          tft.setCursor((tft.width() - x2) / 2, 34);
+          tft.setTextColor(COLOUR_WHITE);
+          tft.print(str);
+
+          tft.fillRect(0, 50, tft.width() / 3, 2, COLOUR_RED);
+        }
+      }
+      else if (pStart.is_released())
+      {
+        mode = (mode + NUM_MODES + 1) % NUM_MODES;
+        tft.fillRect(0, 16, tft.width(), 32, COLOUR_BLACK);
+        tft.setCursor(0, 16);
+        tft.setTextColor(COLOUR_YELLOW);
+        tft.print(modes[mode]);
+      }
+      else if (pReset.is_released())
+      {
+        mode = (mode + NUM_MODES - 1) % NUM_MODES;
+        tft.fillRect(0, 16, tft.width(), 32, COLOUR_BLACK);
+        tft.setCursor(0, 16);
+        tft.setTextColor(COLOUR_YELLOW);
+        tft.print(modes[mode]);
+      }
+      else if (pBack.is_released())
+      {
+        state = BaseState::INITIALISATION;
+      }
+    }
+    else
+    {
+      static int8_t field = 0;
+      if (mode == 0 || mode == 1)
+      {
+        const int8_t delta = pConfig.is_released() ? 1 : (pBack.is_released() ? -1 : 0);
+        if (delta != 0)
+        {
+          field += delta;
+          tft.fillRect(0, 50, tft.width(), 2, COLOUR_BLACK);
+          if (field < 0 || field == 3)
+          {
+            field = 0;
+            selected = false;
+
+            tft.fillRect(0, 16, tft.width(), 32, COLOUR_BLACK);
+            tft.setCursor(0, 16);
+            tft.setTextColor(COLOUR_YELLOW);
+            tft.print(modes[mode]);
+            if (delta > 0)
+              rtc.setDateTime(dt);
+          }
+          else
+          {
+            tft.fillRect((tft.width() / 3) * field, 50, tft.width() / 3, 2, COLOUR_RED);
+          }
+        }
+        if (mode == 1)
+        {
+          const int8_t delta = pStart.is_released() ? 1 : (pReset.is_released() ? -1 : 0);
+          if (delta != 0)
+          {
+            switch (field)
+            {
+              case 0:
+                dt.hours += delta;
+              break;
+              case 1:
+                dt.minutes += delta;
+              break;
+              case 2:
+                dt.seconds += delta;
+              break;
+            }
+            dt.normalize();
+
+            char str[8];
+            sprintf(str, "%02d:%02d:%02d", dt.hours, dt.minutes, dt.seconds);
+
+            tft.fillRect(0, 34, tft.width(), 16, COLOUR_BLACK);
+            tft.getTextBounds(str, 0, 0, &x1, &y1, &x2, &y2);
+            tft.setTextSize(2);
+            tft.setCursor((tft.width() - x2) / 2, 34);
+            tft.setTextColor(COLOUR_WHITE);
+            tft.print(str);
+          }
+        }
+      }
+      if (pBack.is_released())
+      {
+        selected = false;
+      }
+    }
+    delay(10);
+  }
+}
+
+void armedActions()
+{
+  digitalWrite(PIN_BUZZER_STRIKE, lastStrike + STRIKE_BUZZ_TIME > millis());
+  digitalWrite(PIN_BUZZER_DISARM, lastDisarm + DISARM_BUZZ_TIME > millis());
+
+  if ((start + settings::time_allowed) < now || indicators.strikes >= settings::max_strikes)
+  {
+    state = BaseState::EXPLODED;
+    end = now;
+    digitalWrite(PIN_BUZZER_STRIKE, 0);
+    digitalWrite(PIN_BUZZER_DISARM, 0);
+    Message tmsg(OpCode::EXPLODED);
+    broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+  }
+  uint8_t numDisarmed = 0;
+  for (uint8_t i = 0; i < indicators.modules; ++i)
+  {
+    Status status = report(modules[i]);
+    if (status.strikes)
+    {
+      indicators.strikes += status.strikes;
+      lastStrike = now;
+      indicate();
+    }
+    if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
+      ++numDisarmed;
+  }
+  if (indicators.disarmed != numDisarmed && numDisarmed != 0)
+  {
+    lastDisarm = now;
+    indicators.disarmed = numDisarmed;
+  }
+  if (numDisarmed == indicators.modules)
+  {
+    state = BaseState::DEFUSED;
+    end = now;
+    digitalWrite(PIN_BUZZER_STRIKE, 0);
+    digitalWrite(PIN_BUZZER_DISARM, 0);
+
+    Message tmsg(OpCode::DEFUSED);
+    broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
+  }
+
+  renderDateTime();
+  displayCountdown();
+}
+
 void loop()
 {
   now = millis();
+  pStart.update();
+  pReset.update();
+  pConfig.update();
+  pBack.update();
 
-  if (state == BaseState::INITIALISATION)
+  switch (state)
   {
-    bool allReady = false;
-    while (!allReady)
-    {
-      allReady = true;
-      for (size_t i = 0; i < moduleCount; ++i)
-      {
-        Status status = report(modules[i]);
-        if (status.state == ModuleState::INITIALISATION)
-        {
-          allReady = false;
-          break;
-        }
-        delay(10);
-      }
-      // small delay so we don't lock up all the slaves in their callbacks
-      delay(10);
-    }
-    state = BaseState::READY;
-    return;
-  }
-
-  if (state == BaseState::READY)
-  {
-    if (digitalRead(PIN_START))
-    {
-      start = now;
-      state = BaseState::ARMED;
-
-      Message tmsg(OpCode::ARM);
-      broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
-
-      renderSerial();
-    }
-    else if (digitalRead(PIN_CONFIG))
-    {
-      state = BaseState::CONFIG;
-      tft.fillScreen(COLOUR_BLACK);
-    }
-  }
-
-  if (state == BaseState::CONFIG)
-  {
-    // PIN_START is up
-    // PIN_RESET is down
-    if (digitalRead(PIN_START))
-    {
-      rtc.setDateTime(DateTime(rtc.getDateTime().now() + 1));
-    }
-    else if (digitalRead(PIN_RESET))
-    {
-      rtc.setDateTime(DateTime(rtc.getDateTime().now() - 1));
-    }
-    else if (digitalRead(PIN_BACK))
-    {
-      state = BaseState::INITIALISATION;
-      render(true);
-    }
-
-    return;
-  }
-
-  if (state == BaseState::ARMED)
-  {
-    digitalWrite(PIN_BUZZER_STRIKE, lastStrike + STRIKE_BUZZ_TIME > millis());
-    digitalWrite(PIN_BUZZER_DISARM, lastDisarm + DISARM_BUZZ_TIME > millis());
-
-    if ((start + settings::time_allowed) < now || strikes >= settings::max_strikes)
-    {
-      state = BaseState::EXPLODED;
-      end = now;
-      digitalWrite(PIN_BUZZER_STRIKE, 0);
-      digitalWrite(PIN_BUZZER_DISARM, 0);
-      Message tmsg(OpCode::EXPLODED);
-      broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
-    }
-    size_t numDisarmed = 0;
-    for (size_t i = 0; i < moduleCount; ++i)
-    {
-      Status status = report(modules[i]);
-      if (status.strikes)
-      {
-        strikes += status.strikes;
-        lastStrike = now;
-        indicate();
-      }
-      if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
-        ++numDisarmed;
-    }
-    if (disarmed != numDisarmed && numDisarmed != 0)
-    {
-      lastDisarm = now;
-      disarmed = numDisarmed;
-    }
-    if (numDisarmed == moduleCount)
-    {
-      state = BaseState::DEFUSED;
-      end = now;
-      digitalWrite(PIN_BUZZER_STRIKE, 0);
-      digitalWrite(PIN_BUZZER_DISARM, 0);
-
-      Message tmsg(OpCode::DEFUSED);
-      broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
-    }
+    case BaseState::INITIALISATION:
+      initActions();
+    break;
+    case BaseState::READY:
+      readyActions();
+    break;
+    case BaseState::CONFIG:
+      configActions();
+    break;
+    case BaseState::ARMED:
+      armedActions();
+    break;
+    default:
+    break;
   }
 
   if (state == BaseState::READY || state == BaseState::DEFUSED || state == BaseState::EXPLODED)
   {
-    if (digitalRead(PIN_RESET))
+    if (pReset.is_released())
     {
       reset();
       return;
     }
   }
-
-  if (state != BaseState::INITIALISATION && state != BaseState::READY)
-    displayCountdown();
-  render();
 }
