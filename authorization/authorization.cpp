@@ -4,8 +4,7 @@
 #include <MFRC522.h>
 #include <SPI.h>
 
-
-const Address addr = address::AUTHORIZATION;
+const uint8_t PIN_ADDRESS_SELECT = A0;
 const uint8_t PIN_DISARM_LED = 3;
 
 const uint8_t PIN_LED_1 = 8;
@@ -31,8 +30,6 @@ uint8_t user;
 
 void initialise()
 {
-  Serial.begin(9600);
-
   pinMode(PIN_LED_1, OUTPUT);
   pinMode(PIN_LED_2, OUTPUT);
   pinMode(PIN_LED_3, OUTPUT);
@@ -183,8 +180,4 @@ void defuse()
 void detonate()
 {
   noTone(PIN_BUZZER);
-  digitalWrite(PIN_LED_1, 0);
-  digitalWrite(PIN_LED_2, 0);
-  digitalWrite(PIN_LED_3, 0);
-  digitalWrite(PIN_LED_4, 0);
 }

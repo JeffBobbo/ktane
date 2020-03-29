@@ -21,10 +21,12 @@ void detonate();
 
 void (*config_cb)() = nullptr;
 
-extern const Address addr;
 #ifndef UTILITY_MODULE
 extern const uint8_t PIN_DISARM_LED;
+extern const uint8_t PIN_ADDRESS_SELECT;
 #endif
+static Address addr;
+
 Indicators indicators;
 
 ModuleState state;
@@ -105,6 +107,12 @@ void requestEvent()
 
 void setup()
 {
+  #ifdef ADDRESS
+  addr = ADDRESS;
+  #else
+  addr = address::MODULE_SLOTS_BASE_ADDRESS + map(analogRead(PIN_ADDRESS_SELECT), 0, 1023, 0, address::NUM_MODULE_SLOTS-1);
+  #endif
+
   // setup comms
   Wire.begin(addr);
   Wire.onReceive(receiveEvent);

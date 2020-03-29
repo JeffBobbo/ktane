@@ -8,6 +8,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 
+#include <FastLED.h>
+
 #include "shared/address.h"
 #include "shared/config.h"
 #include "shared/debounce.h"
@@ -19,25 +21,46 @@
 
 // analog pins
 const uint8_t PIN_SEED = A0; // for seeding rng
+const uint8_t PIN_POTS[] = {A8, A9, A10, A11, A12, A13, A14, A15};
 
-const uint8_t PIN_CONFIG = A2;
-const uint8_t PIN_BACK = A3;
+const uint8_t PIN_CONFIG = 23;
+const uint8_t PIN_BACK = 25;
 
 // digital pins
 const uint8_t PIN_CLK = 2;
 const uint8_t PIN_DIO = 3;
 
-const uint8_t PIN_START = 4;
-const uint8_t PIN_RESET = 5;
+const uint8_t PIN_START = 22;
+const uint8_t PIN_RESET = 24;
 
 const uint8_t PIN_SD_CS = 8;
 
 const uint8_t PIN_BUZZER_DISARM = 6;
 const uint8_t PIN_BUZZER_STRIKE = 7;
 
+const uint8_t PIN_RELAY = 27;
+
 const int8_t TFT_CS = 10;
 const int8_t TFT_RST = -1;
 const int8_t TFT_DC = 9;
+
+const uint8_t PIN_LEDS = 26;
+const size_t NUM_LEDS = 1;
+CRGB leds[NUM_LEDS];
+const uint32_t LED_CORRECTION = 0xFFFFFF;
+
+const uint8_t PIN_MODULE_RELAY = 34;
+
+// numerical 7 seg
+const uint8_t PIN_DATA  = 28;
+const uint8_t PIN_CLOCK = 30;
+const uint8_t PIN_LATCH = 32;
+
+// strike LEDs
+const uint8_t PIN_STRIKE_0 = 35;
+const uint8_t PIN_STRIKE_1 = 37;
+const uint8_t PIN_STRIKE_2 = 39;
+
 
 Debounce pStart(PIN_START);
 Debounce pReset(PIN_RESET);
@@ -66,11 +89,30 @@ uint32_t lastDisarm;
 uint32_t STRIKE_BUZZ_TIME = 300;
 uint32_t DISARM_BUZZ_TIME = 200;
 
-Address modules[address::NUM_MODULES];
+uint8_t modules;
 Indicators indicators;
 
 uint8_t& strikes = indicators.strikes;
 
+const uint8_t SEG_TABLE[] = {
+  B11000000, //0
+  B11111001, //1
+  B10100100, //2
+  B10110000, //3
+  B10011001, //4
+  B10010010, //5
+  B10000010, //6
+  B11111000, //7
+  B10000000, //8
+  B10011000 //9
+};
+void segment(const uint8_t v)
+{
+  digitalWrite(PIN_LATCH, 0);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[v % 10]);
+  shiftOut(PIN_DATA, PIN_CLOCK, MSBFIRST, v == 255 ? 255 : SEG_TABLE[(v / 10) % 10]);
+  digitalWrite(PIN_LATCH, 1);
+}
 
 DS3231 rtc;
 TM1637Display countdown(PIN_CLK, PIN_DIO);
@@ -78,20 +120,14 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 void broadcast(const uint8_t* const data, const size_t len)
 {
-  for (uint8_t i = 0; i < indicators.modules; ++i)
+  for (uint8_t i = 0; i < address::NUM_MODULE_SLOTS; ++i)
   {
-    Wire.beginTransmission(modules[i]);
+    if (modules & (1 << i) == 0)
+      continue;
+    Wire.beginTransmission(address::MODULE_SLOTS_BASE_ADDRESS + i);
     Wire.write(data, len);
     Wire.endTransmission();
   }
-
-  Wire.beginTransmission(address::INDICATORS);
-  Wire.write(data, len);
-  Wire.endTransmission();
-
-  Wire.beginTransmission(address::LID),
-  Wire.write(data, len);
-  Wire.endTransmission();
 }
 
 bool detect(const uint8_t address)
@@ -100,13 +136,20 @@ bool detect(const uint8_t address)
   return Wire.endTransmission() == 0;
 }
 
-void scan()
+uint8_t scan()
 {
-  for (uint8_t i = 0; i < address::NUM_MODULES; ++i)
+  uint8_t r = 0;
+  for (uint8_t i = 0; i < address::NUM_MODULE_SLOTS; ++i)
   {
-    if (detect(address::modules[i]))
-      modules[indicators.modules++] = address::modules[i];
+    if (detect(address::MODULE_SLOTS_BASE_ADDRESS + i))
+    {
+      Serial.print("Module in slot #");
+      Serial.println(i);
+      r |= 1 << i;
+      ++indicators.modules;
+    }
   }
+  return r;
 }
 
 Status report(const Address address)
@@ -153,6 +196,11 @@ void indicate()
   memcpy(msg.data, &indicators, sizeof(indicators));
 
   broadcast(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+
+  digitalWrite(PIN_STRIKE_0, indicators.strikes > 0);
+  digitalWrite(PIN_STRIKE_1, indicators.strikes > 1);
+  digitalWrite(PIN_STRIKE_2, indicators.strikes > 2);
+  segment(indicators.numerical);
 }
 
 void reset()
@@ -164,8 +212,14 @@ void reset()
   lastStrike = 0;
   lastDisarm = 0;
 
-  memset(modules, 0, address::NUM_MODULES);
+  modules = 0;
   indicators.modules = 0;
+
+  segment(255);
+
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.show();
+
   // generate random serial hash
   generate();
 
@@ -176,7 +230,7 @@ void reset()
   // delay to ensure they're all powered up
   delay(250);
 
-  scan();
+  modules = scan();
 
   Message rmsg(OpCode::RESET);
   broadcast(reinterpret_cast<uint8_t*>(&rmsg), sizeof(rmsg));
@@ -195,23 +249,12 @@ void reset()
 
 void setup()
 {
-  countdown.setBrightness(0x01);
-
-  randomSeed(analogRead(PIN_SEED));
-
-  pStart.init();
-  pReset.init();
-  pConfig.init();
-  pBack.init();
-
-  pinMode(PIN_BUZZER_STRIKE, OUTPUT);
-  pinMode(PIN_BUZZER_DISARM, OUTPUT);
+  Serial.begin(9600);
 
   Wire.begin();
 
-  //tft.init();
   tft.initR(INITR_BLACKTAB);
-  tft.setRotation(3);
+  tft.setRotation(1);
   tft.fillScreen(COLOUR_BLACK);
   tft.setCursor(16, 16);
 
@@ -227,10 +270,72 @@ void setup()
     while (1);
   }
 
+  FastLED.addLeds<WS2812, PIN_LEDS, GRB>(leds, NUM_LEDS).setCorrection(LED_CORRECTION);
+  FastLED.setBrightness(255);
+
+  countdown.setBrightness(0x01);
+
+  randomSeed(analogRead(PIN_SEED));
+
+  pStart.init();
+  pReset.init();
+  pConfig.init();
+  pBack.init();
+
+  pinMode(PIN_BUZZER_STRIKE, OUTPUT);
+  pinMode(PIN_BUZZER_DISARM, OUTPUT);
+  pinMode(PIN_RELAY, OUTPUT);
+
+  pinMode(PIN_CLOCK, OUTPUT);
+  pinMode(PIN_LATCH, OUTPUT);
+  pinMode(PIN_DATA, OUTPUT);
+
+  pinMode(PIN_MODULE_RELAY, OUTPUT);
+
   // make sure storage is setup correctly
   if (!SD.exists("/logs"))
     SD.mkdir("/logs");
 
+
+  // check addresses
+  uint8_t addresses[8] = {0};
+  for (uint8_t i = 0; i < 8; ++i)
+    addresses[i] = map(analogRead(PIN_POTS[i]), 0, 1023, 0, 8);
+
+  bool potsNeedConfig = false;
+  for (uint8_t i = 0; i < 8; ++i)
+  {
+    for (uint8_t j = i+1; j < 8; ++j)
+    {
+      if (addresses[i] == addresses[j])
+        potsNeedConfig = true;
+    }
+  }
+  while (potsNeedConfig)
+  {
+    tft.fillRect(0, 0, tft.width(), tft.height(), COLOUR_BLACK);
+
+    tft.setCursor(16, 16);
+
+    for (uint8_t i = 0; i < 8; ++i)
+      addresses[i] = map(analogRead(PIN_POTS[i]), 0, 1023, 0, 8);
+
+    for (uint8_t i = 0; i < 8; ++i)
+      tft.print(addresses[i]);
+
+    bool overlap = false;
+    for (uint8_t i = 0; i < 8; ++i)
+    {
+      for (uint8_t j = i+1; j < 8; ++j)
+      {
+        if (addresses[i] == addresses[j])
+          overlap = true;
+      }
+    }
+
+    if (potsNeedConfig && !overlap && digitalRead(PIN_START))
+      break;
+  }
 
   reset();
 }
@@ -322,9 +427,11 @@ void initActions()
   while (!allReady)
   {
     allReady = true;
-    for (uint8_t i = 0; i < indicators.modules; ++i)
+    for (uint8_t i = 0; i < address::NUM_MODULE_SLOTS; ++i)
     {
-      Status status = report(modules[i]);
+      if ((modules & (1 << i)) == 0)
+        continue;
+      Status status = report(address::MODULE_SLOTS_BASE_ADDRESS + i);
       if (status.state == ModuleState::INITIALISATION)
       {
         allReady = false;
@@ -355,6 +462,9 @@ void readyActions()
     tft.fillScreen(COLOUR_BLACK);
     renderDateTime(true);
     renderSerial();
+
+    fill_solid(leds, NUM_LEDS, CRGB::White);
+    FastLED.show();
 
     Message tmsg(OpCode::ARM);
     broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
@@ -528,26 +638,42 @@ void armedActions()
   digitalWrite(PIN_BUZZER_STRIKE, lastStrike + STRIKE_BUZZ_TIME > millis());
   digitalWrite(PIN_BUZZER_DISARM, lastDisarm + DISARM_BUZZ_TIME > millis());
 
-  if ((start + settings::time_allowed) < now || indicators.strikes >= settings::max_strikes)
+  const int32_t remaining = max((start + settings::time_allowed) - (end ? end : now), 0);
+  Serial.print("Time remaining: ");
+  Serial.println(remaining);
+  Serial.print("Strikes (c/m): ");
+  Serial.print(indicators.strikes);
+  Serial.print("/");
+  Serial.println(settings::max_strikes);
+  if ((remaining < 0) || (indicators.strikes >= settings::max_strikes))
   {
     state = BaseState::EXPLODED;
     end = now;
     digitalWrite(PIN_BUZZER_STRIKE, 0);
     digitalWrite(PIN_BUZZER_DISARM, 0);
+
+    fill_solid(leds, NUM_LEDS, CRGB::Red);
+    FastLED.show();
+
     Message tmsg(OpCode::EXPLODED);
     broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
   }
   uint8_t numDisarmed = 0;
-  for (uint8_t i = 0; i < indicators.modules; ++i)
+  for (uint8_t i = 0; i < address::NUM_MODULE_SLOTS; ++i)
   {
-    Status status = report(modules[i]);
+    if ((modules & (1 << i)) == 0)
+      continue;
+    Status status = report(address::MODULE_SLOTS_BASE_ADDRESS + i);
     if (status.strikes)
     {
+      Serial.print("Module #");
+      Serial.print(i);
+      Serial.println(" striked!");
       indicators.strikes += status.strikes;
       lastStrike = now;
       indicate();
     }
-    if (address::isNeedy(modules[i]) || status.state == ModuleState::DISARMED)
+    if (status.state == ModuleState::DISARMED)
       ++numDisarmed;
   }
   if (indicators.disarmed != numDisarmed && numDisarmed != 0)
@@ -562,12 +688,18 @@ void armedActions()
     digitalWrite(PIN_BUZZER_STRIKE, 0);
     digitalWrite(PIN_BUZZER_DISARM, 0);
 
+    fill_solid(leds, NUM_LEDS, 0x1F3F7F);
+    FastLED.show();
+
     Message tmsg(OpCode::DEFUSED);
     broadcast(reinterpret_cast<uint8_t*>(&tmsg), sizeof(tmsg));
   }
 
   renderDateTime();
   displayCountdown();
+
+  digitalWrite(PIN_RELAY, ((remaining) / (remaining > 60L * 1000L ? 1000 : 500)) % 2);
+  // digitalWrite(PIN_RELAY, ((remaining) / (remaining > 60L * 1000L ? 1000 : 500)) % 2);
 }
 
 void loop()
