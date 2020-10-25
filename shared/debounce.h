@@ -56,6 +56,7 @@ private:
   uint8_t state;
 };
 
+
 class Debounce16
 {
 public:
@@ -74,7 +75,7 @@ public:
 
   bool is_pressed()
   {
-    const uint8_t MASK = 0b1100000000011111;
+    const uint16_t MASK = 0b1100000000011111;
     if ((state & MASK) == 0b0000000000011111)
     {
       state = 0b1111111111111111;
@@ -85,7 +86,7 @@ public:
 
   bool is_released()
   {
-    const uint8_t MASK = 0b1100000000011111;
+    const uint16_t MASK = 0b1100000000011111;
     if ((state & MASK) == 0b1111000000000000)
     {
       state = 0b0000000000000000;
@@ -94,19 +95,19 @@ public:
     return false;
   }
 
-  uint8_t is_down() const
+  bool is_down() const
   {
     return state == 0b1111111111111111;
   }
-  uint8_t is_up() const
+  bool is_up() const
   {
     return state == 0b0000000000000000;
   }
 
 private:
-  const uint16_t pin;
+  const uint8_t pin;
   const bool active_low;
-  uint8_t state;
+  uint16_t state;
 };
 
 #endif
