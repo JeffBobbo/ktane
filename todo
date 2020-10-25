@@ -6,5 +6,3 @@ rename `Indicators`/`onIndicators` to `update` or something
 module versioning to prevent UB
 license
 migrate
-merge into master
-simon's logic needs reworking
