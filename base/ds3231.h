@@ -219,7 +219,7 @@ public:
     twi->endTransmission();
 
     DateTime dt;
-    twi->requestFrom(address, 7);
+    twi->requestFrom(address, 7U);
     dt.seconds = bcd_decode(twi->read());
     dt.minutes = bcd_decode(twi->read());
     const int8_t hour = twi->read();
@@ -264,7 +264,7 @@ public:
     twi->write(ADDRESS_TEMP_INT);
     twi->endTransmission();
 
-    twi->requestFrom(address, 2);
+    twi->requestFrom(address, 2U);
     const uint8_t msb = twi->read();
     const uint8_t lsb = twi->read();
 
